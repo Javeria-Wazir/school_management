@@ -3,7 +3,7 @@ import { idSchema } from "@/lib/validation/common";
 import { academicYearSchema, updateAcademicYearSchema } from "@/lib/validation/settings";
 import type { Db } from "@/server/db/client";
 import { withActor } from "@/server/db/actor";
-import { academicYears, enrollments, examTerms, schoolSettings, sections } from "@/server/db/schema";
+import { academicYears, examTerms, schoolSettings, sections } from "@/server/db/schema";
 import { AppError, notFound } from "@/server/errors";
 import { assertAdmin, type ServiceContext } from "./guards";
 import { parseInput } from "./validate";
@@ -28,9 +28,9 @@ export async function listAcademicYears(db: Db): Promise<AcademicYearRow[]> {
       startDate: academicYears.startDate,
       endDate: academicYears.endDate,
       isCurrent: sql<boolean>`coalesce(${academicYears.id} = (select ${schoolSettings.currentAcademicYearId} from ${schoolSettings} where ${schoolSettings.id} = 1), false)`,
-      sectionCount: sql<number>`(select count(*)::int from ${sections} where ${sections.academicYearId} = ${academicYears.id})`,
-      termCount: sql<number>`(select count(*)::int from ${examTerms} where ${examTerms.academicYearId} = ${academicYears.id})`,
-      studentCount: sql<number>`(select count(*)::int from ${enrollments} where ${enrollments.academicYearId} = ${academicYears.id} and ${enrollments.status} = 'active')`,
+      sectionCount: sql<number>`(select count(*)::int from sections s where s.academic_year_id = "academic_years"."id")`,
+      termCount: sql<number>`(select count(*)::int from exam_terms t where t.academic_year_id = "academic_years"."id")`,
+      studentCount: sql<number>`(select count(*)::int from enrollments e where e.academic_year_id = "academic_years"."id" and e.status = 'active')`,
     })
     .from(academicYears)
     .orderBy(desc(academicYears.startDate));
@@ -94,4 +94,15 @@ export async function setCurrentAcademicYear(ctx: ServiceContext, input: unknown
       })
       .where(eq(schoolSettings.id, 1));
   });
+}
+
+/**
+ * The academic year a page should show: the one requested in the URL (if it exists), else the current
+ * year, else the most recent one. `selected` is null only when no year exists yet.
+ */
+export async function resolveAcademicYear(db: Db, requested?: string | string[]): Promise<{ years: AcademicYearRow[]; selected: AcademicYearRow | null }> {
+  const years = await listAcademicYears(db);
+  const wanted = typeof requested === "string" ? requested : undefined;
+  const selected = years.find((y) => y.id === wanted) ?? years.find((y) => y.isCurrent) ?? years[0] ?? null;
+  return { years, selected };
 }

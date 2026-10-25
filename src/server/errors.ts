@@ -43,6 +43,20 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   correction_requests_one_open: "A correction request is already open for this mark sheet.",
 };
 
+/** Friendly messages for records that cannot be removed because others depend on them. */
+const IN_USE_MESSAGES: Record<string, string> = {
+  sections_class_id_classes_id_fk: "This class has sections. Delete its sections first, or make the class inactive.",
+  class_subjects_class_id_classes_id_fk: "This class has subjects for an academic year. Remove them first, or make the class inactive.",
+  enrollments_class_id_classes_id_fk: "This class has students. Make it inactive instead.",
+  enrollments_section_id_sections_id_fk: "This section has students. Move or withdraw them first, or make the section inactive.",
+  class_subjects_subject_id_subjects_id_fk: "This subject is taught in a class. Remove it from those classes first, or make it inactive.",
+  assessments_class_subject_id_class_subjects_id_fk: "Exam terms already have assessments for this subject, so it cannot be removed. Make it inactive instead.",
+  mark_sheets_class_subject_id_class_subjects_id_fk: "Marks have been entered for this subject, so it cannot be removed. Make it inactive instead.",
+  mark_sheets_section_id_sections_id_fk: "Marks have been entered for this section, so it cannot be deleted. Make it inactive instead.",
+  exam_terms_grading_scale_id_grading_scales_id_fk: "Exam terms use this grading scale. Choose another scale for them first.",
+  teacher_assignments_teacher_id_users_id_fk: "This staff member has teaching assignments. Deactivate the account instead.",
+};
+
 interface PgLikeError {
   code?: string;
   message?: string;
@@ -72,7 +86,8 @@ export function toAppError(error: unknown): AppError | null {
     case "23505":
       return new AppError("CONFLICT", UNIQUE_MESSAGES[constraint] ?? "This record already exists.");
     case "23503":
-      return new AppError("CONFLICT", "This record is still in use by other records, so it cannot be removed or changed this way.");
+    case "23001": // RESTRICT foreign key
+      return new AppError("CONFLICT", IN_USE_MESSAGES[constraint] ?? "This record is still in use by other records, so it cannot be removed or changed this way.");
     case "23514":
     case "22P02":
     case "22003":

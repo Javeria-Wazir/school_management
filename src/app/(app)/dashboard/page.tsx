@@ -79,11 +79,11 @@ function setupSteps(o: AdminOverview) {
     { label: "Enter the school's name and details", done: o.schoolNameSet, href: "/admin/settings" },
     { label: "Create the academic year and make it current", done: o.currentYear !== null, href: "/admin/academic-years" },
     { label: "Add teacher accounts", done: o.staff.teachers > 0, href: "/admin/staff", detail: `${o.staff.teachers} active` },
-    { label: "Set up classes and subjects", done: n.classes > 0 && n.subjects > 0, detail: `${n.classes} classes · ${n.subjects} subjects` },
-    { label: "Create sections and assign class teachers", done: n.sections > 0 && n.classTeachers === n.sections, detail: `${n.classTeachers} of ${n.sections} sections have a class teacher` },
-    { label: "Enrol students", done: n.students > 0, detail: `${n.students} enrolled` },
-    { label: "Assign subject teachers", done: n.assignments > 0, detail: `${n.assignments} assignments` },
-    { label: "Create exam terms", done: n.examTerms > 0, detail: `${n.examTerms} terms` },
+    { label: "Set up classes and subjects", done: n.classes > 0 && n.subjects > 0, href: "/admin/subjects", detail: `${n.classes} classes · ${n.subjects} subjects` },
+    { label: "Create sections and assign class teachers", done: n.sections > 0 && n.classTeachers === n.sections, href: "/admin/classes", detail: `${n.classTeachers} of ${n.sections} sections have a class teacher` },
+    { label: "Enrol students", done: n.students > 0, href: "/admin/students", detail: `${n.students} enrolled` },
+    { label: "Assign subject teachers", done: n.assignments > 0, href: "/admin/assignments", detail: `${n.assignments} assignments` },
+    { label: "Create exam terms", done: n.examTerms > 0, href: "/admin/exam-terms", detail: `${n.examTerms} terms` },
   ];
 }
 

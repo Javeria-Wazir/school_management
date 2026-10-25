@@ -216,8 +216,8 @@ steps and how to verify each one.
 | # | Module | Status |
 |---|---|---|
 | 1 | Scaffold, schema + migrations + triggers, auth/sessions/RBAC, app shell, staff management, school settings, academic years, grading maths library | done (81 tests) |
-| 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | next |
-| 3 | Subject teacher dashboard, marks entry grid, drafts, submission | |
+| 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | done (107 tests) |
+| 3 | Subject teacher dashboard, marks entry grid, drafts, submission | next |
 | 4 | Class teacher review, corrections, return/approve, consolidation, incomplete detection | |
 | 5 | Class result sheet, class/principal approval, reopen, analytics and charts. Snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result | |
 | 6 | A4 PDF report cards, Excel/CSV export, WhatsApp reminders | |
@@ -230,3 +230,15 @@ steps and how to verify each one.
 * **Local development** should use a Neon development branch. Without a Neon account,
   `npm run db:local` serves a PGlite database on `localhost:5433` (data in `.local-db/`, git-ignored;
   set `DATABASE_POOL_MAX=1`). It is for development only — official records live in Neon.
+
+## 11. Student import design
+
+* Two steps, both on the server: **preview** parses and validates every row against the database and returns a
+  report; **import** parses and validates the same file again inside one transaction (with an advisory lock so two
+  imports cannot claim the same roll numbers) and writes only if no row has an error. The browser's copy of the
+  report is never trusted.
+* Accepted: .xlsx (checked to really be a zip workbook) and UTF-8 CSV (comma or semicolon), ≤ 2 MB, ≤ 2,000 rows.
+  .xls/.xlsm are refused. Header names are matched flexibly (e.g. "Admission No", "Father Name", "DOB").
+* Outcomes per row: *new* (student created and enrolled), *enrol* (existing student ID with the same name, not yet
+  enrolled this year — details are not overwritten), *unchanged* (already enrolled identically), *error*.
+* The downloadable report escapes cells that spreadsheets would run as formulas (=, +, -, @).

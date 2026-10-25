@@ -17,6 +17,8 @@ export const createStaffSchema = z.object({
 
 export const updateStaffSchema = z.object({
   id: z.uuid("Unknown staff member"),
+  /** Optional: when given, the sign-in e-mail changes too. */
+  email: staffEmailSchema.optional(),
   fullName: staffNameSchema,
   phone: optionalPhoneSchema,
   role: roleSchema,

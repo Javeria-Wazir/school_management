@@ -11,7 +11,7 @@ migrations · Neon serverless PostgreSQL · Vercel.
 > application reuses its domain rules, not its code, and does not depend on it.
 
 - Architecture, schema, auth and deployment plan: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Build status by module: [§ 8](#8-modules-and-status)
+- Build status by module: [§ 9](#9-modules-and-status)
 
 ---
 
@@ -46,6 +46,7 @@ Edit `.env.local`:
 | `SESSION_IDLE_MINUTES` | optional | sign out after this many idle minutes (default 60) |
 | `SESSION_MAX_HOURS` | optional | sign out this many hours after sign-in (default 12) |
 | `DEV_AUTO_LOGIN` | development only | skip the sign-in page and act as this staff e-mail (§ 2.6); refused in production |
+| `DATABASE_POOL_MAX` | optional | connections per server instance (default 5; use 1 with `npm run db:local`) |
 
 `.env.local` is git-ignored. Never put real connection strings in any committed file.
 
@@ -192,7 +193,26 @@ Delete the production strings from `.env.local` afterwards.
    the SQL yourself (separate statements with `--> statement-breakpoint`).
 4. `npm test`, commit, push. Vercel applies the migration on the next deploy.
 
-## 4. Roles
+## 4. Setting up a school year (principal)
+
+1. **Academic years**: create the year (e.g. 2026-2027) and make it current.
+2. **Classes & sections**: add classes once (Class 6, Class 7…), then each year's sections with their class teacher.
+3. **Subjects**: add the school's subjects, then under *Subjects by class* tick which subjects each class studies
+   that year and whether each is compulsory and counts in the total. A new year can copy last year's set-up.
+4. **Students**: add them one by one, or **Import from Excel/CSV**. Download the template (it lists the year's
+   exact class/section names), fill it in, and *Check file*. The validation report shows every row as New,
+   Enrol existing, No change or Error with the reason, and can be downloaded as CSV. Nothing is saved until you
+   confirm, and nothing at all is saved while any row has an error. Roll numbers are unique within a class for
+   the year (across its sections). Local phone numbers like 0300 1234567 are stored as +923001234567 using the
+   country code in School settings.
+5. **Teacher assignments**: pick the subject teacher for every subject of every section (saves immediately).
+6. **Exam terms & marks**: add the terms, make one current, and *Set up maximum marks* — every class subject gets
+   the component defaults (Monthly Test 25 + Term Examination 75). Change any subject's maximum in the grid;
+   maximums lock once marks are submitted.
+7. **Grading scales**: adjust pass marks and grade bands, or create a scale for a particular term. A scale used
+   by an approved result is locked.
+
+## 5. Roles
 
 | Role | How | Can |
 |---|---|---|
@@ -203,7 +223,7 @@ Delete the production strings from `.env.local` afterwards.
 One person can be both class teacher and subject teacher. Every permission is checked on the server for
 each request; hiding a button is only a convenience.
 
-## 5. Security summary
+## 6. Security summary
 
 - Passwords: scrypt (Node built-in), minimum 8 characters with a letter and a digit. Temporary passwords
   issued by the principal must be changed at first sign-in.
@@ -218,7 +238,7 @@ each request; hiding a button is only a convenience.
 - Security headers (HSTS, `X-Frame-Options: DENY`, `nosniff`, referrer policy) on every response.
 - Secrets exist only in environment variables; `.env*` files are git-ignored (except `.env.example`).
 
-## 6. Project layout
+## 7. Project layout
 
 ```
 drizzle/                 SQL migrations (generated + hand-written triggers)
@@ -231,7 +251,7 @@ src/server/              server-only: db, auth, services, errors
 tests/unit, tests/db     Vitest; db tests run on PGlite with the real migrations
 ```
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -241,13 +261,13 @@ tests/unit, tests/db     Vitest; db tests run on PGlite with the real migrations
 | "Too many failed sign-in attempts" | Wait 15 minutes, or the principal resets the password. |
 | The only administrator forgot their password | Another administrator can reset it in *Staff accounts*. If there is none, someone with the database connection string runs `npm run db:reset-password -- --email principal@school.edu` (hidden prompt; audited; signs the user out everywhere). Keeping two administrator accounts avoids this. |
 
-## 8. Modules and status
+## 9. Modules and status
 
 | # | Module | Status |
 |---|---|---|
 | 1 | Project setup, schema and migrations, authentication and sessions, server-side RBAC, app shell, staff accounts, school settings and logo, academic years, grading maths library | **Done** (tested) |
-| 2 | Classes, sections and class teachers, subjects and class subjects, students and enrolments with Excel/CSV import and validation report, teacher assignments, exam terms, assessment maximums, grading scales | Next |
-| 3 | Subject teacher dashboard, marks entry grid, drafts, submission, missing-mark detection | Planned |
+| 2 | Classes, sections and class teachers, subjects and class subjects (compulsory / counts in total), students and enrolments with Excel/CSV import and validation report, teacher assignments, exam terms, mark components and per-term maximum marks, grading scales | **Done** (tested) |
+| 3 | Subject teacher dashboard, marks entry grid, drafts, submission, missing-mark detection | Next |
 | 4 | Class teacher review, return/approve, correction requests, consolidation of all subjects, incomplete results | Planned |
 | 5 | Class result sheet, class and principal approval, reopen with reason, subject analytics and charts | Planned |
 | 6 | A4 PDF report cards, Excel/CSV export, WhatsApp click-to-chat reminders | Planned |

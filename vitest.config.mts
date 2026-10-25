@@ -14,5 +14,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 120_000,
+    // Each database test file runs its own in-memory PostgreSQL (PGlite); more parallel copies
+    // exhaust memory on ordinary laptops and crash workers, so files run one at a time.
+    maxWorkers: 1,
   },
 });

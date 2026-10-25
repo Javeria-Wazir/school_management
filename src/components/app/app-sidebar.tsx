@@ -1,6 +1,20 @@
 "use client";
 
-import { CalendarRange, GraduationCap, KeyRound, LayoutDashboard, Settings, Users, type LucideIcon } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  CalendarRange,
+  ClipboardList,
+  GraduationCap,
+  KeyRound,
+  LayoutDashboard,
+  School,
+  Settings,
+  UserCheck,
+  Users,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -25,6 +39,12 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   calendar: CalendarRange,
   settings: Settings,
   password: KeyRound,
+  classes: School,
+  subjects: BookOpen,
+  students: UsersRound,
+  assignments: UserCheck,
+  terms: ClipboardList,
+  grading: Award,
 };
 
 export function AppSidebar({ groups, schoolName, roleLabel }: { groups: NavGroup[]; schoolName: string; roleLabel: string }) {

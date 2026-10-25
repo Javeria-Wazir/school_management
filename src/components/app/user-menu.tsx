@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
+  // Only words that start with a letter, so "Principal (dev)" gives "P", not "P(".
+  const parts = name.trim().split(/\s+/).filter((w) => /^\p{L}/u.test(w));
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }
 

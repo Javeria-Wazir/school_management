@@ -24,6 +24,13 @@ async function main() {
     await db.close();
     process.exit(0);
   };
+  // pglite-socket removes a connection's error handler while detaching it, so a client that drops its
+  // connection abruptly (e.g. a restarted dev server) raises ECONNRESET with no listener. Ignore those.
+  process.on("uncaughtException", (error: NodeJS.ErrnoException) => {
+    if (error.code === "ECONNRESET" || error.code === "EPIPE") return;
+    console.error(error);
+    process.exit(1);
+  });
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }

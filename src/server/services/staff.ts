@@ -7,7 +7,7 @@ import { createStaffSchema, setStaffActiveSchema, staffIdSchema, updateStaffSche
 import { generateTemporaryPassword, hashPassword } from "@/server/auth/password";
 import { deleteUserSessions } from "@/server/auth/session";
 import { withActor } from "@/server/db/actor";
-import { sections, teacherAssignments, users, type UserRole } from "@/server/db/schema";
+import { users, type UserRole } from "@/server/db/schema";
 import { AppError, notFound } from "@/server/errors";
 import { assertAdmin, type ServiceContext } from "./guards";
 import { parseInput } from "./validate";
@@ -39,8 +39,8 @@ export async function listStaff(ctx: ServiceContext): Promise<StaffRow[]> {
       mustChangePassword: users.mustChangePassword,
       lastLoginAt: users.lastLoginAt,
       createdAt: users.createdAt,
-      classTeacherOf: sql<number>`(select count(*)::int from ${sections} where ${sections.classTeacherId} = ${users.id} and ${sections.isActive})`,
-      subjectAssignments: sql<number>`(select count(*)::int from ${teacherAssignments} where ${teacherAssignments.teacherId} = ${users.id})`,
+      classTeacherOf: sql<number>`(select count(*)::int from sections s where s.class_teacher_id = "users"."id" and s.is_active)`,
+      subjectAssignments: sql<number>`(select count(*)::int from teacher_assignments ta where ta.teacher_id = "users"."id")`,
     })
     .from(users)
     .orderBy(asc(users.fullName));
@@ -65,14 +65,15 @@ export async function updateStaff(ctx: ServiceContext, input: unknown): Promise<
   assertAdmin(ctx.user);
   const data = parseInput(updateStaffSchema, input);
   await withActor(ctx.db, ctx.user.id, async (tx) => {
-    const [existing] = await tx.select({ role: users.role }).from(users).where(eq(users.id, data.id)).for("update");
+    const [existing] = await tx.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, data.id)).for("update");
     if (!existing) throw notFound("Staff member");
     if (data.id === ctx.user.id && data.role !== existing.role) {
       throw new AppError("RULE", "You cannot change your own role. Ask another administrator.");
     }
-    await tx.update(users).set({ fullName: data.fullName, phone: data.phone ?? null, role: data.role }).where(eq(users.id, data.id));
-    // A role change takes effect immediately: the user must sign in again.
-    if (data.role !== existing.role) await deleteUserSessions(tx, data.id);
+    const email = data.email ?? existing.email;
+    await tx.update(users).set({ email, fullName: data.fullName, phone: data.phone ?? null, role: data.role }).where(eq(users.id, data.id));
+    // A new role or sign-in e-mail takes effect immediately: the user must sign in again.
+    if (data.role !== existing.role || (email !== existing.email && data.id !== ctx.user.id)) await deleteUserSessions(tx, data.id);
   });
 }
 

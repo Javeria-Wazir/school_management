@@ -98,6 +98,15 @@ describe("staff accounts", () => {
     await setStaffActive(admin, { id: v.user.id, active: true });
   });
 
+  it("changes a staff member's sign-in e-mail and signs them out", async () => {
+    const u = await addUser(t.db, { email: "placeholder@ces.local" });
+    await updateStaff(admin, { id: u.user.id, email: " Real.Teacher@School.EDU ", fullName: "Real Teacher", role: "teacher" });
+    const [row] = await t.db.select().from(schema.users).where(eq(schema.users.id, u.user.id));
+    expect(row.email).toBe("real.teacher@school.edu");
+    expect(await validateSessionToken(t.db, u.token)).toBeNull();
+    await rejectsWith(updateStaff(admin, { id: u.user.id, email: "TEACHER@school.test", fullName: "Real Teacher", role: "teacher" }), /already exists/);
+  });
+
   it("does not let administrators demote or deactivate themselves", async () => {
     await rejectsWith(updateStaff(admin, { id: admin.user.id, fullName: "Principal", role: "teacher" }), /cannot change your own role/);
     await rejectsWith(setStaffActive(admin, { id: admin.user.id, active: false }), /cannot deactivate your own account/);

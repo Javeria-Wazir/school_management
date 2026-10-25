@@ -46,3 +46,6 @@ next-env.d.ts
 
 # one-time password written by db:create-admin --temporary
 /.admin-temporary-password*.txt
+
+# one-time passwords for teacher accounts created on the live database
+/.live-teacher-accounts.txt
