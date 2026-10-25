@@ -1,0 +1,10 @@
+# Never upload local secrets, local data or build output. Vercel gets its settings from
+# Project → Settings → Environment Variables.
+.env*
+!.env.example
+.local-db/
+.admin-temporary-password*.txt
+.next/
+node_modules/
+coverage/
+tests/

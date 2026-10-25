@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# development-only local database (scripts/local-db.ts)
+/.local-db/
+
+# one-time password written by db:create-admin --temporary
+/.admin-temporary-password*.txt
