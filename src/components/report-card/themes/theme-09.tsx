@@ -4,11 +4,11 @@ import { Fragment } from "react";
 import type { CardView } from "../types";
 
 const CSS =
-  ".rc-theme-09 .row{display:grid;grid-template-columns:28px minmax(0,2.2fr) repeat(4,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.9fr);align-items:center;column-gap:6px}\n.rc-theme-09 .row>div{text-align:center}\n.rc-theme-09 .row>div.left{text-align:left}\n.rc-theme-09 .body-row{border-bottom:1px solid #A9B5C2;min-height:34px}\n.rc-theme-09 .mx{color:#4F5D6D;font-size:11px;font-weight:500}";
+  ".rc-theme-09 .row{display:grid;grid-template-columns:28px minmax(0,2.2fr) repeat(4,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.9fr);align-items:center;column-gap:6px}\n.rc-theme-09 .row>div{text-align:center}\n.rc-theme-09 .row>div.left{text-align:left}\n.rc-theme-09 .body-row{border-bottom:1px solid #A9B5C2;min-height:34px}\n.rc-theme-09 .mx{color:#4F5D6D;font-size:11px;font-weight:500}\n.rc-theme-09.rc-monthly .row{grid-template-columns:28px minmax(0,2.2fr) repeat(2,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.9fr)}\n.rc-theme-09.rc-monthly [data-col=component]{display:none}";
 
 export function Theme09({ v }: { v: CardView }) {
   return (
-    <div className="rc-theme-09">
+    <div className={v.monthlyOnly ? "rc-theme-09 rc-monthly" : "rc-theme-09"}>
       <style>{CSS}</style>
       <div
         style={{
@@ -168,8 +168,8 @@ export function Theme09({ v }: { v: CardView }) {
           >
             <div>#</div>
             <div className="left">Subject</div>
-            <div>Monthly</div>
-            <div>Term</div>
+            <div data-col="component">Monthly</div>
+            <div data-col="component">Term</div>
             <div>Obtained</div>
             <div>Out of</div>
             <div>%</div>
@@ -203,11 +203,11 @@ export function Theme09({ v }: { v: CardView }) {
                   />
                   {r.name}
                 </div>
-                <div>
+                <div data-col="component">
                   {r.m}
                   <span className="mx">/{r.mm}</span>
                 </div>
-                <div>
+                <div data-col="component">
                   {r.t}
                   <span className="mx">/{r.tm}</span>
                 </div>

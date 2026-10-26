@@ -175,6 +175,11 @@ from the source marks.
   student is shown as **Incomplete**, never Pass/Fail.
 * Report cards are **official** only after final approval; anything earlier prints a
   *PROVISIONAL* watermark. Signature areas are always blank lines — no images.
+* **Two stages per term** (`result_stage`: `monthly` | `term`, migrations 0002–0003). Mark sheets are per
+  term × section × subject × stage: the `monthly` sheet holds the MONTHLY component, the `term` sheet every
+  other component (`app_private.assessment_stage`). Result approvals and remarks are per stage: the monthly
+  result uses monthly sheets only; the term result uses both. An approved monthly result locks the monthly
+  sheets; an approved term result locks both (`app_private.result_locked(term, section, stage)`).
 * Implemented so far (services `marks.ts`, `results.ts`, `report-cards.ts`): draft → submitted →
   approved / returned, class approval, final approval, reopen, remarks. The class result compiles only
   marks from submitted or approved sheets; a draft is still the teacher's working copy. The optional

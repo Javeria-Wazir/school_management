@@ -20,7 +20,7 @@ afterAll(() => t.close());
 const setMark = (enrollmentIndex: number, assessmentId: string, value: string | null) =>
   t.db
     .insert(schema.marks)
-    .values({ markSheetId: s.sheet.id, assessmentId, enrollmentId: s.enrollments[enrollmentIndex].id, marksObtained: value })
+    .values({ markSheetId: assessmentId === s.monthly.id ? s.monthlySheet.id : s.sheet.id, assessmentId, enrollmentId: s.enrollments[enrollmentIndex].id, marksObtained: value })
     .onConflictDoUpdate({ target: [schema.marks.assessmentId, schema.marks.enrollmentId], set: { marksObtained: value } });
 
 describe("migrations and defaults", () => {
@@ -108,6 +108,17 @@ describe("marks trigger", () => {
     await t.db.update(schema.schoolSettings).set({ allowDecimalMarks: false, decimalPlaces: 2 });
   });
 
+  it("keeps Monthly Test marks on the monthly sheet and other marks on the term sheet", async () => {
+    await rejectsWith(
+      t.db.insert(schema.marks).values({ markSheetId: s.sheet.id, assessmentId: s.monthly.id, enrollmentId: s.enrollments[1].id, marksObtained: "10" }),
+      /belong on the monthly mark sheet/,
+    );
+    await rejectsWith(
+      t.db.insert(schema.marks).values({ markSheetId: s.monthlySheet.id, assessmentId: s.termExam.id, enrollmentId: s.enrollments[1].id, marksObtained: "10" }),
+      /belong on the monthly mark sheet/,
+    );
+  });
+
   it("records who entered a mark", async () => {
     await withActor(t.db, s.subjectTeacher.user.id, (tx) =>
       tx.insert(schema.marks).values({ markSheetId: s.sheet.id, assessmentId: s.termExam.id, enrollmentId: s.enrollments[1].id, marksObtained: "70" }),
@@ -180,6 +191,24 @@ describe("workflow guards", () => {
       .where(eq(schema.resultApprovals.sectionId, s.section.id));
     await t.db.update(schema.markSheets).set({ status: "returned", returnReason: "Wrong marks entered" }).where(eq(schema.markSheets.id, s.sheet.id));
     await setMark(0, s.termExam.id, "55");
+  });
+
+  it("locks monthly sheets with the monthly result, and both stages with the term result", async () => {
+    await t.db.update(schema.markSheets).set({ status: "submitted" }).where(eq(schema.markSheets.id, s.monthlySheet.id));
+    await t.db.update(schema.markSheets).set({ status: "approved" }).where(eq(schema.markSheets.id, s.monthlySheet.id));
+    await t.db
+      .insert(schema.resultApprovals)
+      .values({ examTermId: s.term.id, sectionId: s.section.id, stage: "monthly", status: "class_approved", classApprovedAt: new Date() });
+    await rejectsWith(
+      t.db.update(schema.markSheets).set({ status: "returned", returnReason: "Monthly marks wrong" }).where(eq(schema.markSheets.id, s.monthlySheet.id)),
+      /Reopen it/,
+    );
+    // The term sheet is not frozen by the monthly result.
+    await setMark(1, s.termExam.id, "60");
+    await rejectsWith(
+      t.db.update(schema.resultApprovals).set({ stage: "term" }).where(eq(schema.resultApprovals.stage, "monthly")),
+      /moved to another term, section or stage/,
+    );
   });
 
   it("does not allow maximum marks to change below an entered mark", async () => {

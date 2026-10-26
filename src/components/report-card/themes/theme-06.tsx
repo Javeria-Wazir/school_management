@@ -4,11 +4,11 @@ import { Fragment } from "react";
 import type { CardView } from "../types";
 
 const CSS =
-  ".rc-theme-06 .row{display:grid;grid-template-columns:36px minmax(0,2.3fr) repeat(4,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.7fr) minmax(0,.95fr);align-items:stretch}\n.rc-theme-06 .row>div{text-align:center;padding:7px 4px;border-right:1px solid #97A4B3;display:flex;align-items:center;justify-content:center}\n.rc-theme-06 .row>div:last-child{border-right:0}\n.rc-theme-06 .row>div.left{justify-content:flex-start;text-align:left;padding-left:10px}\n.rc-theme-06 .body-row{border-top:1px solid #97A4B3}\n.rc-theme-06 .mx{color:#4F5D6D;font-size:11px;font-weight:500;margin-left:1px}";
+  ".rc-theme-06 .row{display:grid;grid-template-columns:36px minmax(0,2.3fr) repeat(4,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.7fr) minmax(0,.95fr);align-items:stretch}\n.rc-theme-06 .row>div{text-align:center;padding:7px 4px;border-right:1px solid #97A4B3;display:flex;align-items:center;justify-content:center}\n.rc-theme-06 .row>div:last-child{border-right:0}\n.rc-theme-06 .row>div.left{justify-content:flex-start;text-align:left;padding-left:10px}\n.rc-theme-06 .body-row{border-top:1px solid #97A4B3}\n.rc-theme-06 .mx{color:#4F5D6D;font-size:11px;font-weight:500;margin-left:1px}\n.rc-theme-06.rc-monthly .row{grid-template-columns:36px minmax(0,2.3fr) repeat(2,minmax(0,1fr)) minmax(0,.95fr) minmax(0,.7fr) minmax(0,.95fr)}\n.rc-theme-06.rc-monthly [data-col=component]{display:none}";
 
 export function Theme06({ v }: { v: CardView }) {
   return (
-    <div className="rc-theme-06">
+    <div className={v.monthlyOnly ? "rc-theme-06 rc-monthly" : "rc-theme-06"}>
       <style>{CSS}</style>
       <div
         style={{
@@ -196,8 +196,8 @@ export function Theme06({ v }: { v: CardView }) {
             >
               <div>No.</div>
               <div className="left">Subject</div>
-              <div>Monthly</div>
-              <div>Term</div>
+              <div data-col="component">Monthly</div>
+              <div data-col="component">Term</div>
               <div>Obtained</div>
               <div>Total</div>
               <div>%</div>
@@ -222,11 +222,11 @@ export function Theme06({ v }: { v: CardView }) {
                     />
                     {r.name}
                   </div>
-                  <div>
+                  <div data-col="component">
                     {r.m}
                     <span className="mx">/{r.mm}</span>
                   </div>
-                  <div>
+                  <div data-col="component">
                     {r.t}
                     <span className="mx">/{r.tm}</span>
                   </div>
@@ -278,8 +278,8 @@ export function Theme06({ v }: { v: CardView }) {
             >
               <div></div>
               <div className="left">Grand Total</div>
-              <div></div>
-              <div></div>
+              <div data-col="component"></div>
+              <div data-col="component"></div>
               <div>{v.total}</div>
               <div>{v.maxTotal}</div>
               <div>{v.pct}</div>

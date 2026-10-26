@@ -19,10 +19,16 @@ export const metadata = { title: "Class result" };
 
 const dateTime = (d: Date) => d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-export default async function ClassResultPage({ params }: PageProps<"/results/[termId]/[sectionId]">) {
+const STAGE = {
+  monthly: { title: "Monthly result", short: "Monthly", hint: "Monthly Test only" },
+  term: { title: "Term result", short: "Term exam", hint: "Monthly Test + term examination" },
+} as const;
+
+export default async function ClassResultPage({ params, searchParams }: PageProps<"/results/[termId]/[sectionId]">) {
   const ctx = await requireUser();
   const { termId, sectionId } = await params;
-  const resultKey = { examTermId: termId, sectionId };
+  const stage = (await searchParams).stage === "term" ? "term" : "monthly";
+  const resultKey = { examTermId: termId, sectionId, stage } as const;
   let result;
   try {
     result = await getClassResult(ctx, resultKey);
@@ -42,7 +48,7 @@ export default async function ClassResultPage({ params }: PageProps<"/results/[t
     else if (s.outcome.status === "Fail") counts.fail += 1;
     else counts.incomplete += 1;
   }
-  const printBase = `/print/results/${termId}/${sectionId}`;
+  const printBase = `/print/results/${termId}/${sectionId}?stage=${stage}`;
 
   return (
     <>
@@ -52,16 +58,32 @@ export default async function ClassResultPage({ params }: PageProps<"/results/[t
         </Link>
       </Button>
       <PageHeader
-        title={`${result.section.className} ${result.section.name} · ${result.term.name}`}
+        title={`${result.section.className} ${result.section.name} · ${result.term.name} · ${STAGE[stage].title}`}
         description={`${result.term.yearName} · Class teacher: ${result.section.classTeacherName ?? "not set"} · Grading: ${result.rules.name}`}
         actions={
           <Button asChild>
             <a href={printBase} target="_blank" rel="noopener">
-              <Printer aria-hidden /> Print all result cards
+              <Printer aria-hidden /> Print all {stage === "monthly" ? "monthly" : "term"} result cards
             </a>
           </Button>
         }
       />
+      <nav aria-label="Result" className="flex flex-wrap gap-2">
+        {(["monthly", "term"] as const).map((s) => (
+          <Link
+            key={s}
+            href={`/results/${termId}/${sectionId}?stage=${s}`}
+            aria-current={s === stage ? "page" : undefined}
+            className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-muted/50", s === stage && "border-primary bg-primary/5 font-medium")}
+          >
+            <span>
+              {STAGE[s].title}
+              <span className="block text-xs font-normal text-muted-foreground">{STAGE[s].hint}</span>
+            </span>
+            <ResultStatusBadge status={s === stage ? approval.status : result.otherStageStatus} />
+          </Link>
+        ))}
+      </nav>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -119,7 +141,7 @@ export default async function ClassResultPage({ params }: PageProps<"/results/[t
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Subjects approved" value={`${readiness.sheetsApproved} / ${readiness.sheetsTotal}`} />
+        <StatCard label="Mark sheets approved" value={`${readiness.sheetsApproved} / ${readiness.sheetsTotal}`} />
         <StatCard label="Students with all marks" value={`${readiness.studentsComplete} / ${readiness.studentsTotal}`} />
         <StatCard label="Passed" value={counts.pass} hint={readiness.studentsComplete ? undefined : "Shown once marks are complete"} />
         <StatCard label="Failed" value={counts.fail} hint={counts.incomplete ? `${counts.incomplete} incomplete` : undefined} />
@@ -128,25 +150,35 @@ export default async function ClassResultPage({ params }: PageProps<"/results/[t
       <Card>
         <CardHeader>
           <CardTitle>Subjects</CardTitle>
-          <CardDescription>Only submitted marks are compiled. Open a subject to approve it or return it to its teacher.</CardDescription>
+          <CardDescription>
+            {stage === "monthly"
+              ? "Only the Monthly Test is compiled, from submitted sheets."
+              : "The Monthly Test and the term examination are compiled together, from submitted sheets."}{" "}
+            Open a sheet to approve it or return it to its teacher.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {result.subjects.map((s) => (
-              <li key={s.id}>
-                <Link
-                  href={`/marks/${termId}/${sectionId}/${s.id}`}
-                  className="flex items-center justify-between gap-2 rounded-lg border p-3 text-sm transition-colors hover:bg-muted/50"
-                >
-                  <span>
-                    <span className="font-medium">{s.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {s.teacherName ?? "No teacher"} · {s.components.map((c) => formatNumber(c.max, places)).join(" + ")}
-                      {s.includeInTotal ? "" : " · not in total"}
-                    </span>
+              <li key={s.id} className="space-y-2 rounded-lg border p-3 text-sm">
+                <p>
+                  <span className="font-medium">{s.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {s.teacherName ?? "No teacher"} · {s.components.map((c) => formatNumber(c.max, places)).join(" + ")}
+                    {s.includeInTotal ? "" : " · not in total"}
                   </span>
-                  <SheetStatusBadge status={s.sheetStatus} />
-                </Link>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {s.sheets.map((sheet) => (
+                    <Link
+                      key={sheet.stage}
+                      href={`/marks/${termId}/${sectionId}/${s.id}?stage=${sheet.stage}`}
+                      className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-muted/50"
+                    >
+                      {STAGE[sheet.stage].short} <SheetStatusBadge status={sheet.status} />
+                    </Link>
+                  ))}
+                </div>
               </li>
             ))}
           </ul>
@@ -230,7 +262,7 @@ export default async function ClassResultPage({ params }: PageProps<"/results/[t
                       </TableCell>
                       <TableCell className="text-right">
                         <Button asChild variant="ghost" size="icon" className="size-8">
-                          <a href={`${printBase}?student=${st.enrollmentId}`} target="_blank" rel="noopener" title={`Print result card for ${st.fullName}`}>
+                          <a href={`${printBase}&student=${st.enrollmentId}`} target="_blank" rel="noopener" title={`Print result card for ${st.fullName}`}>
                             <Printer aria-hidden />
                             <span className="sr-only">Print result card for {st.fullName}</span>
                           </a>

@@ -15,6 +15,20 @@
       "when": 1792683172083,
       "tag": "0001_triggers_and_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793036390965,
+      "tag": "0002_monthly_stage",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793036407622,
+      "tag": "0003_monthly_stage_rules",
+      "breakpoints": true
     }
   ]
 }

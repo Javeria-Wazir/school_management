@@ -6,7 +6,7 @@ import { runAction } from "@/server/actions";
 import { requireUser } from "@/server/auth/current";
 import { approveMarkSheet, returnMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
 
-type SheetKey = { examTermId: string; sectionId: string; classSubjectId: string };
+type SheetKey = { examTermId: string; sectionId: string; classSubjectId: string; stage: "monthly" | "term" };
 type Cell = { enrollmentId: string; assessmentId: string; value: string };
 
 function refresh(key: SheetKey) {

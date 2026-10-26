@@ -4,9 +4,11 @@
  * A mark sheet is one exam term × section × class subject. Marks are stored per student × component
  * (Monthly, Term …). A component without a mark is *missing*, never zero; "0" is a real score.
  * Workflow: draft → submitted → approved, or returned (with a reason) back to the teacher.
+ * Each subject has two sheets per term: the Monthly Test (`monthly`) and the other components (`term`),
+ * so monthly results can be published before the term examination.
  * The database triggers re-check ranges, decimals, locks and status transitions for every caller.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Dec } from "@/lib/domain/calculations";
 import { idSchema } from "@/lib/validation/common";
@@ -32,7 +34,7 @@ import {
   teacherAssignments,
   users,
   type MarkSheetStatus,
-  type ResultApprovalStatus,
+  type ResultStage,
 } from "@/server/db/schema";
 import { AppError, forbidden, notFound, type FieldErrors } from "@/server/errors";
 import { assertAdmin, type ServiceContext } from "./guards";
@@ -52,7 +54,8 @@ interface SheetContext {
   classSubject: { id: string; subjectName: string; subjectCode: string };
   teacher: { id: string; fullName: string } | null;
   sheet: typeof markSheets.$inferSelect | null;
-  resultStatus: ResultApprovalStatus | null;
+  /** An approved result covers this stage (monthly sheets: monthly or term result; term sheets: term result). */
+  resultLocked: boolean;
 }
 
 async function loadSheetContext(db: Db | Tx, key: SheetKey): Promise<SheetContext> {
@@ -81,12 +84,20 @@ async function loadSheetContext(db: Db | Tx, key: SheetKey): Promise<SheetContex
   const [sheet] = await db
     .select()
     .from(markSheets)
-    .where(and(eq(markSheets.examTermId, key.examTermId), eq(markSheets.sectionId, key.sectionId), eq(markSheets.classSubjectId, key.classSubjectId)));
-  const [approval] = await db
-    .select({ status: resultApprovals.status })
+    .where(
+      and(
+        eq(markSheets.examTermId, key.examTermId),
+        eq(markSheets.sectionId, key.sectionId),
+        eq(markSheets.classSubjectId, key.classSubjectId),
+        eq(markSheets.stage, key.stage),
+      ),
+    );
+  const approvals = await db
+    .select({ stage: resultApprovals.stage, status: resultApprovals.status })
     .from(resultApprovals)
     .where(and(eq(resultApprovals.examTermId, key.examTermId), eq(resultApprovals.sectionId, key.sectionId)));
-  return { ...row, teacher: teacher ?? null, sheet: sheet ?? null, resultStatus: approval?.status ?? null };
+  const resultLocked = approvals.some((a) => a.status !== "open" && (a.stage === "term" || a.stage === key.stage));
+  return { ...row, teacher: teacher ?? null, sheet: sheet ?? null, resultLocked };
 }
 
 export interface SheetAccess {
@@ -103,7 +114,7 @@ function sheetAccess(user: SessionUser, c: SheetContext): SheetAccess & { canVie
   const isSubjectTeacher = c.teacher?.id === user.id;
   const isClassTeacher = c.section.classTeacherId === user.id;
   const status = c.sheet?.status ?? "draft";
-  const locked = c.resultStatus !== null && c.resultStatus !== "open";
+  const locked = c.resultLocked;
   return {
     canView: isAdmin || isSubjectTeacher || isClassTeacher,
     canEdit: (isAdmin || isSubjectTeacher) && (status === "draft" || status === "returned") && !locked,
@@ -113,12 +124,18 @@ function sheetAccess(user: SessionUser, c: SheetContext): SheetAccess & { canVie
   };
 }
 
-async function loadComponents(db: Db | Tx, examTermId: string, classSubjectId: string) {
+/** The Monthly Test component is the "monthly" stage; every other component belongs to "term". */
+export const stageOfCode = (code: string): ResultStage => (code === "MONTHLY" ? "monthly" : "term");
+
+/** The components of one stage: the Monthly Test alone, or every other component. */
+export const stageFilter = (stage: ResultStage) => (stage === "monthly" ? eq(assessmentTypes.code, "MONTHLY") : ne(assessmentTypes.code, "MONTHLY"));
+
+async function loadComponents(db: Db | Tx, examTermId: string, classSubjectId: string, stage: ResultStage) {
   return db
     .select({ assessmentId: assessments.id, code: assessmentTypes.code, name: assessmentTypes.name, maxMarks: assessments.maxMarks })
     .from(assessments)
     .innerJoin(assessmentTypes, eq(assessmentTypes.id, assessments.assessmentTypeId))
-    .where(and(eq(assessments.examTermId, examTermId), eq(assessments.classSubjectId, classSubjectId)))
+    .where(and(eq(assessments.examTermId, examTermId), eq(assessments.classSubjectId, classSubjectId), stageFilter(stage)))
     .orderBy(asc(assessmentTypes.sortOrder), asc(assessmentTypes.name));
 }
 
@@ -132,10 +149,11 @@ async function loadStudents(db: Db | Tx, sectionId: string) {
 }
 
 /** Missing marks of active students (a student × component without a mark). */
-async function countMissing(db: Db | Tx, sheetId: string | null, sectionId: string, examTermId: string, classSubjectId: string) {
+async function countMissing(db: Db | Tx, sheetId: string | null, key: SheetKey) {
+  const { sectionId, examTermId, classSubjectId, stage } = key;
   // Sequential: inside a transaction every query shares one connection.
   const studentRows = await loadStudents(db, sectionId);
-  const componentRows = await loadComponents(db, examTermId, classSubjectId);
+  const componentRows = await loadComponents(db, examTermId, classSubjectId, stage);
   let entered = 0;
   if (sheetId && studentRows.length && componentRows.length) {
     const [row] = await db
@@ -151,6 +169,16 @@ async function countMissing(db: Db | Tx, sheetId: string | null, sectionId: stri
 
 // -- lists ----------------------------------------------------------------------------------------
 
+/** One stage (Monthly Test or term components) of one subject's marks in a section. */
+export interface StageCell {
+  sheetId: string | null;
+  status: SheetStatus;
+  /** Components of this stage with maximum marks this term (0 = the stage does not apply). */
+  components: number;
+  entered: number;
+  returnReason: string | null;
+}
+
 export interface MarkSheetRow {
   examTermId: string;
   sectionId: string;
@@ -163,17 +191,14 @@ export interface MarkSheetRow {
   teacherId: string | null;
   teacherName: string | null;
   classTeacherId: string | null;
-  sheetId: string | null;
-  status: SheetStatus;
   students: number;
-  components: number;
-  entered: number;
-  returnReason: string | null;
+  monthly: StageCell;
+  term: StageCell;
 }
 
 /**
- * Mark sheets of a term: `mine` = the signed-in teacher's subjects, `class` = subjects of the
- * sections they are class teacher of, `all` = every sheet (principal only).
+ * Subjects of a term with both stages' sheets: `mine` = the signed-in teacher's subjects, `class` =
+ * subjects of the sections they are class teacher of, `all` = every subject (principal only).
  */
 export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: unknown; scope: "mine" | "class" | "all" }): Promise<MarkSheetRow[]> {
   const examTermId = parseInput(idSchema, input.examTermId);
@@ -194,13 +219,7 @@ export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: u
       teacherId: teacherAssignments.teacherId,
       teacherName: users.fullName,
       classTeacherId: sections.classTeacherId,
-      sheetId: markSheets.id,
-      status: markSheets.status,
-      returnReason: markSheets.returnReason,
       students: sql<number>`(select count(*)::int from enrollments e where e.section_id = ${sections.id} and e.status = 'active')`,
-      components: sql<number>`(select count(*)::int from assessments a where a.exam_term_id = ${examTermId} and a.class_subject_id = ${classSubjects.id})`,
-      entered: sql<number>`(select count(*)::int from marks m join enrollments e on e.id = m.enrollment_id
-        where m.mark_sheet_id = ${markSheets.id} and e.status = 'active' and m.marks_obtained is not null)`,
     })
     .from(sections)
     .innerJoin(classes, eq(classes.id, sections.classId))
@@ -211,13 +230,46 @@ export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: u
     .innerJoin(subjects, eq(subjects.id, classSubjects.subjectId))
     .leftJoin(teacherAssignments, and(eq(teacherAssignments.sectionId, sections.id), eq(teacherAssignments.classSubjectId, classSubjects.id)))
     .leftJoin(users, eq(users.id, teacherAssignments.teacherId))
-    .leftJoin(
-      markSheets,
-      and(eq(markSheets.examTermId, examTermId), eq(markSheets.sectionId, sections.id), eq(markSheets.classSubjectId, classSubjects.id)),
-    )
     .where(and(eq(sections.academicYearId, term.yearId), eq(sections.isActive, true), scopeFilter))
     .orderBy(asc(classes.sortOrder), asc(classes.name), asc(sections.name), asc(classSubjects.sortOrder), asc(subjects.name));
-  return rows.map((r) => ({ ...r, examTermId, status: r.status ?? "not_started", entered: r.sheetId ? r.entered : 0 }));
+  if (rows.length === 0) return [];
+
+  const componentRows = await ctx.db
+    .select({ classSubjectId: assessments.classSubjectId, code: assessmentTypes.code })
+    .from(assessments)
+    .innerJoin(assessmentTypes, eq(assessmentTypes.id, assessments.assessmentTypeId))
+    .where(eq(assessments.examTermId, examTermId));
+  const sheetRows = await ctx.db
+    .select({
+      id: markSheets.id,
+      sectionId: markSheets.sectionId,
+      classSubjectId: markSheets.classSubjectId,
+      stage: markSheets.stage,
+      status: markSheets.status,
+      returnReason: markSheets.returnReason,
+      // Qualified by hand: Drizzle leaves columns unqualified in a single-table select.
+      entered: sql<number>`(select count(*)::int from marks m join enrollments e on e.id = m.enrollment_id
+        where m.mark_sheet_id = "mark_sheets"."id" and e.status = 'active' and m.marks_obtained is not null)`,
+    })
+    .from(markSheets)
+    .where(and(eq(markSheets.examTermId, examTermId), inArray(markSheets.sectionId, [...new Set(rows.map((r) => r.sectionId))])));
+  const components = new Map<string, number>();
+  for (const c of componentRows) {
+    const k = `${c.classSubjectId}:${stageOfCode(c.code)}`;
+    components.set(k, (components.get(k) ?? 0) + 1);
+  }
+  const sheets = new Map(sheetRows.map((s) => [`${s.sectionId}:${s.classSubjectId}:${s.stage}`, s]));
+  const cell = (sectionId: string, classSubjectId: string, stage: ResultStage): StageCell => {
+    const sheet = sheets.get(`${sectionId}:${classSubjectId}:${stage}`);
+    return {
+      sheetId: sheet?.id ?? null,
+      status: sheet?.status ?? "not_started",
+      components: components.get(`${classSubjectId}:${stage}`) ?? 0,
+      entered: sheet?.entered ?? 0,
+      returnReason: sheet?.status === "returned" ? sheet.returnReason : null,
+    };
+  };
+  return rows.map((r) => ({ ...r, examTermId, monthly: cell(r.sectionId, r.classSubjectId, "monthly"), term: cell(r.sectionId, r.classSubjectId, "term") }));
 }
 
 // -- one sheet ------------------------------------------------------------------------------------
@@ -247,6 +299,8 @@ export interface MarkSheetView {
   expected: number;
   missing: number;
   access: SheetAccess;
+  /** Both stages of this subject, for switching between the Monthly Test and the term sheet. */
+  stages: { stage: ResultStage; components: number; status: SheetStatus }[];
 }
 
 export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise<MarkSheetView> {
@@ -254,11 +308,21 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
   const c = await loadSheetContext(ctx.db, key);
   const access = sheetAccess(ctx.user, c);
   if (!access.canView) throw forbidden("Only the subject teacher, the class teacher or the principal can open this mark sheet.");
-  const [components, studentRows, [settings]] = await Promise.all([
-    loadComponents(ctx.db, key.examTermId, key.classSubjectId),
+  const [allComponents, studentRows, [settings], stageSheets] = await Promise.all([
+    ctx.db
+      .select({ assessmentId: assessments.id, code: assessmentTypes.code, name: assessmentTypes.name, maxMarks: assessments.maxMarks })
+      .from(assessments)
+      .innerJoin(assessmentTypes, eq(assessmentTypes.id, assessments.assessmentTypeId))
+      .where(and(eq(assessments.examTermId, key.examTermId), eq(assessments.classSubjectId, key.classSubjectId)))
+      .orderBy(asc(assessmentTypes.sortOrder), asc(assessmentTypes.name)),
     loadStudents(ctx.db, key.sectionId),
     ctx.db.select({ allowDecimals: schoolSettings.allowDecimalMarks, places: schoolSettings.decimalPlaces }).from(schoolSettings).where(eq(schoolSettings.id, 1)),
+    ctx.db
+      .select({ stage: markSheets.stage, status: markSheets.status })
+      .from(markSheets)
+      .where(and(eq(markSheets.examTermId, key.examTermId), eq(markSheets.sectionId, key.sectionId), eq(markSheets.classSubjectId, key.classSubjectId))),
   ]);
+  const components = allComponents.filter((a) => stageOfCode(a.code) === key.stage);
   const markRows = c.sheet
     ? await ctx.db.select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained }).from(marks).where(eq(marks.markSheetId, c.sheet.id))
     : [];
@@ -283,7 +347,7 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     returnReason: c.sheet?.status === "returned" ? c.sheet.returnReason : null,
     submittedAt: c.sheet?.submittedAt ?? null,
     approvedAt: c.sheet?.approvedAt ?? null,
-    resultLocked: c.resultStatus !== null && c.resultStatus !== "open",
+    resultLocked: c.resultLocked,
     allowDecimals: settings.allowDecimals,
     decimalPlaces: settings.places,
     components,
@@ -292,27 +356,42 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     expected,
     missing: expected - Object.keys(values).length,
     access: { canEdit: access.canEdit && components.length > 0, canReview: access.canReview, canApprove: access.canApprove },
+    stages: (["monthly", "term"] as const).map((stage) => ({
+      stage,
+      components: allComponents.filter((a) => stageOfCode(a.code) === stage).length,
+      status: stageSheets.find((s) => s.stage === stage)?.status ?? "not_started",
+    })),
   };
 }
 
 function lockedMessage(c: SheetContext): string {
-  if (c.resultStatus && c.resultStatus !== "open") return "The class result is approved, so these marks are locked. The principal must reopen it first.";
+  if (c.resultLocked) return "The class result is approved, so these marks are locked. The principal must reopen it first.";
   if (c.sheet && c.sheet.status !== "draft" && c.sheet.status !== "returned") return "These marks have been submitted. Ask the class teacher to return the sheet if something needs correcting.";
   return "You can only enter marks for the subjects assigned to you.";
 }
 
 function reviewForbidden(c: SheetContext) {
-  if (c.resultStatus && c.resultStatus !== "open") return forbidden("The class result is approved, so these marks are locked. The principal must reopen it first.");
+  if (c.resultLocked) return forbidden("The class result is approved, so these marks are locked. The principal must reopen it first.");
   return forbidden("Only the class teacher of this class or the principal can review these marks.");
 }
 
 /** Create the sheet row on first save (always as a draft). */
 async function ensureSheet(tx: Tx, key: SheetKey): Promise<typeof markSheets.$inferSelect> {
-  await tx.insert(markSheets).values(key).onConflictDoNothing({ target: [markSheets.examTermId, markSheets.sectionId, markSheets.classSubjectId] });
+  await tx
+    .insert(markSheets)
+    .values(key)
+    .onConflictDoNothing({ target: [markSheets.examTermId, markSheets.sectionId, markSheets.classSubjectId, markSheets.stage] });
   const [sheet] = await tx
     .select()
     .from(markSheets)
-    .where(and(eq(markSheets.examTermId, key.examTermId), eq(markSheets.sectionId, key.sectionId), eq(markSheets.classSubjectId, key.classSubjectId)));
+    .where(
+      and(
+        eq(markSheets.examTermId, key.examTermId),
+        eq(markSheets.sectionId, key.sectionId),
+        eq(markSheets.classSubjectId, key.classSubjectId),
+        eq(markSheets.stage, key.stage),
+      ),
+    );
   return sheet;
 }
 
@@ -322,11 +401,11 @@ async function ensureSheet(tx: Tx, key: SheetKey): Promise<typeof markSheets.$in
  */
 export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ saved: number; missing: number }> {
   const data = parseInput(saveMarksSchema, input);
-  const key = { examTermId: data.examTermId, sectionId: data.sectionId, classSubjectId: data.classSubjectId };
+  const key = { examTermId: data.examTermId, sectionId: data.sectionId, classSubjectId: data.classSubjectId, stage: data.stage };
   return withActor(ctx.db, ctx.user.id, async (tx) => {
     const c = await loadSheetContext(tx, key);
     if (!sheetAccess(ctx.user, c).canEdit) throw forbidden(lockedMessage(c));
-    const components = await loadComponents(tx, key.examTermId, key.classSubjectId);
+    const components = await loadComponents(tx, key.examTermId, key.classSubjectId, key.stage);
     const studentRows = await loadStudents(tx, key.sectionId);
     const [settings] = await tx
       .select({ allowDecimals: schoolSettings.allowDecimalMarks, places: schoolSettings.decimalPlaces })
@@ -373,7 +452,7 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
         .values(changes)
         .onConflictDoUpdate({ target: [marks.assessmentId, marks.enrollmentId], set: { marksObtained: sql`excluded.marks_obtained` } });
     }
-    const { missing } = await countMissing(tx, sheet.id, key.sectionId, key.examTermId, key.classSubjectId);
+    const { missing } = await countMissing(tx, sheet.id, key);
     return { saved: changes.length, missing };
   });
 }
@@ -385,7 +464,7 @@ export async function submitMarkSheet(ctx: ServiceContext, input: unknown): Prom
     const c = await loadSheetContext(tx, key);
     if (!sheetAccess(ctx.user, c).canEdit) throw forbidden(lockedMessage(c));
     const sheet = await ensureSheet(tx, key);
-    const count = await countMissing(tx, sheet.id, key.sectionId, key.examTermId, key.classSubjectId);
+    const count = await countMissing(tx, sheet.id, key);
     if (count.components === 0) throw new AppError("RULE", "The principal has not set the maximum marks for this subject in this term yet.");
     if (count.students === 0) throw new AppError("RULE", "No students are enrolled in this section.");
     if (count.missing > 0) {
@@ -403,7 +482,7 @@ export async function submitMarkSheet(ctx: ServiceContext, input: unknown): Prom
 
 async function loadSheetById(tx: Tx, sheetId: string) {
   const [sheet] = await tx
-    .select({ examTermId: markSheets.examTermId, sectionId: markSheets.sectionId, classSubjectId: markSheets.classSubjectId })
+    .select({ examTermId: markSheets.examTermId, sectionId: markSheets.sectionId, classSubjectId: markSheets.classSubjectId, stage: markSheets.stage })
     .from(markSheets)
     .where(eq(markSheets.id, sheetId));
   if (!sheet) throw notFound("Mark sheet");
@@ -419,7 +498,7 @@ export async function approveMarkSheet(ctx: ServiceContext, input: unknown): Pro
     if (!access.canReview) throw reviewForbidden(c);
     if (!access.canApprove) throw forbidden("You submitted these marks, so someone else must approve them: the class teacher or the principal.");
     if (c.sheet!.status !== "submitted" && c.sheet!.status !== "under_review") throw new AppError("RULE", "Only submitted marks can be approved.");
-    const count = await countMissing(tx, sheetId, c.section.id, c.term.id, c.classSubject.id);
+    const count = await countMissing(tx, sheetId, { examTermId: c.term.id, sectionId: c.section.id, classSubjectId: c.classSubject.id, stage: c.sheet!.stage });
     if (count.missing > 0) {
       throw new AppError("RULE", `${count.missing} mark${count.missing === 1 ? " is" : "s are"} missing (for example a student enrolled after submission). Return the sheet to the teacher.`);
     }
@@ -450,13 +529,13 @@ export async function returnMarkSheet(ctx: ServiceContext, input: unknown): Prom
 /** Sheets of one section and term, keyed by class subject (for the class result page). */
 export async function sheetStatusesForSection(db: Db, examTermId: string, sectionId: string) {
   return db
-    .select({ id: markSheets.id, classSubjectId: markSheets.classSubjectId, status: markSheets.status, returnReason: markSheets.returnReason })
+    .select({ id: markSheets.id, classSubjectId: markSheets.classSubjectId, stage: markSheets.stage, status: markSheets.status, returnReason: markSheets.returnReason })
     .from(markSheets)
     .where(and(eq(markSheets.examTermId, examTermId), eq(markSheets.sectionId, sectionId)));
 }
 
-/** Marks counted in a class result: only from sheets the subject teacher has submitted. */
-export async function submittedMarksForSection(db: Db, examTermId: string, sectionId: string, enrollmentIds: string[]) {
+/** Marks counted in a class result: only from submitted sheets of the given stages. */
+export async function submittedMarksForSection(db: Db, examTermId: string, sectionId: string, enrollmentIds: string[], stages: ResultStage[]) {
   if (enrollmentIds.length === 0) return [];
   return db
     .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained })
@@ -466,6 +545,7 @@ export async function submittedMarksForSection(db: Db, examTermId: string, secti
       and(
         eq(markSheets.examTermId, examTermId),
         eq(markSheets.sectionId, sectionId),
+        inArray(markSheets.stage, stages),
         inArray(markSheets.status, ["submitted", "under_review", "approved"]),
         inArray(marks.enrollmentId, enrollmentIds),
       ),

@@ -34,7 +34,7 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
     <>
       <PageHeader
         title="Class results"
-        description={caps.isAdmin ? "Every class for this term. Class teachers approve their class; you give the final approval." : "Compile your class's result from the approved subject marks, add remarks, approve and print result cards."}
+        description={caps.isAdmin ? "Every class for this term: the monthly result (Monthly Test only) and the term result (Monthly Test + term examination). Class teachers approve their class; you give the final approval." : "Publish the monthly result as soon as the Monthly Test marks are approved, and the term result once the term examination is approved too."}
       />
       <div className="flex flex-wrap items-end gap-3">
         <UrlSelect param="term" label="Exam term" value={selected.id} options={terms.map((t) => ({ value: t.id, label: t.isCurrent ? `${t.name} (current)` : t.name }))} />
@@ -51,11 +51,8 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                 <TableHead>Class</TableHead>
                 <TableHead>Class teacher</TableHead>
                 <TableHead className="text-right">Students</TableHead>
-                <TableHead>Subjects approved</TableHead>
-                <TableHead>Result</TableHead>
-                <TableHead className="text-right">
-                  <span className="sr-only">Action</span>
-                </TableHead>
+                <TableHead className="min-w-52">Monthly result</TableHead>
+                <TableHead className="min-w-52">Term result</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -66,23 +63,32 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                   </TableCell>
                   <TableCell>{r.classTeacherName ?? <span className="text-muted-foreground">Not set</span>}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.students}</TableCell>
-                  <TableCell className="tabular-nums">
-                    {r.sheetsTotal === 0 ? (
-                      <span className="text-xs text-muted-foreground">No maximum marks set</span>
-                    ) : (
-                      <span className={r.sheetsApproved === r.sheetsTotal ? "text-emerald-700 dark:text-emerald-400" : undefined}>
-                        {r.sheetsApproved} of {r.sheetsTotal}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <ResultStatusBadge status={r.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant={caps.isAdmin && r.status === "class_approved" ? "default" : "outline"}>
-                      <Link href={`/results/${selected.id}/${r.sectionId}`}>Open result</Link>
-                    </Button>
-                  </TableCell>
+                  {(["monthly", "term"] as const).map((stage) => {
+                    const summary = r[stage];
+                    return (
+                      <TableCell key={stage}>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 space-y-1">
+                            <ResultStatusBadge status={summary.status} />
+                            <p className="text-xs tabular-nums text-muted-foreground">
+                              {summary.sheetsTotal === 0 ? (
+                                "No maximum marks set"
+                              ) : (
+                                <span className={summary.sheetsApproved === summary.sheetsTotal ? "text-emerald-700 dark:text-emerald-400" : undefined}>
+                                  {summary.sheetsApproved} of {summary.sheetsTotal} mark sheets approved
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <Button asChild size="sm" variant={caps.isAdmin && summary.status === "class_approved" ? "default" : "outline"}>
+                            <Link href={`/results/${selected.id}/${r.sectionId}?stage=${stage}`}>
+                              Open<span className="sr-only"> {stage === "monthly" ? "monthly" : "term"} result</span>
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))}
             </TableBody>

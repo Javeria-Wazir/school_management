@@ -86,7 +86,8 @@ export async function rejectsWith(promise: Promise<unknown>, pattern: RegExp): P
 
 /**
  * A minimal school: one year, Class 6 section A with a class teacher, English with a subject teacher,
- * one term with Monthly (25) + Term (75) assessments, two enrolled students and an open draft mark sheet.
+ * one term with Monthly (25) + Term (75) assessments, two enrolled students and open draft mark sheets
+ * for both stages (`monthlySheet` holds the Monthly Test, `sheet` the Term Examination).
  */
 export async function seedSchool(db: Db) {
   const admin = await addUser(db, { role: "admin" });
@@ -121,8 +122,10 @@ export async function seedSchool(db: Db) {
     .insert(schema.enrollments)
     .values(students.map((s, i) => ({ studentId: s.id, academicYearId: year.id, classId: klass.id, sectionId: section.id, rollNumber: i + 1 })))
     .returning();
-  const [sheet] = await db.insert(schema.markSheets).values({ examTermId: term.id, sectionId: section.id, classSubjectId: classSubject.id }).returning();
+  const key = { examTermId: term.id, sectionId: section.id, classSubjectId: classSubject.id };
+  const [sheet] = await db.insert(schema.markSheets).values({ ...key, stage: "term" }).returning();
+  const [monthlySheet] = await db.insert(schema.markSheets).values({ ...key, stage: "monthly" }).returning();
   const monthly = assessments.find((a) => a.maxMarks === "25.00")!;
   const termExam = assessments.find((a) => a.maxMarks === "75.00")!;
-  return { admin, classTeacher, subjectTeacher, year, klass, section, english, classSubject, term, monthly, termExam, students, enrollments, sheet };
+  return { admin, classTeacher, subjectTeacher, year, klass, section, english, classSubject, term, monthly, termExam, students, enrollments, sheet, monthlySheet };
 }

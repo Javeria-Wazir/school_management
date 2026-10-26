@@ -214,21 +214,27 @@ Delete the production strings from `.env.local` afterwards.
 
 ## 4a. Entering marks and publishing results
 
-1. **Marks entry** (subject teacher): open a subject, type the Monthly and Term marks (Enter moves down) and
+Each term is published in two stages. The **monthly result** uses only the Monthly Test and can be
+compiled, approved and printed as soon as the Monthly Test marks are approved. The **term result**
+combines the same Monthly Test marks (entered once) with the term examination, once both are approved.
+Every subject therefore has two mark sheets per term — *Monthly Test* and *Term examination* — each
+entered, submitted and approved on its own, and each result has its own approval and remarks.
+
+1. **Marks entry** (subject teacher): open a subject's *Monthly Test* or *Term examination*, type the marks (Enter moves down) and
    *Save draft* as often as needed. A blank box is *missing*; 0 is a real mark. *Submit to class teacher* is
    refused while any mark is missing. The principal can open any sheet and enter marks on a teacher's behalf;
    the audit log records who did it.
 2. **Review** (class teacher): under *Marks entry → My class's subjects*, open a submitted subject and
    *Approve marks* or *Return for correction* with a reason. Nobody approves marks they submitted themselves
    (the principal approves a class teacher's own subject).
-3. **Class results** (class teacher): compiles every subject from the submitted marks — totals, percentage,
+3. **Class results** (class teacher): choose *Monthly result* or *Term result*; it compiles every subject from the submitted marks — totals, percentage,
    grade, pass/fail and position. A student with any missing mark is *Incomplete* (no total, grade or
    position). Add each student's remarks, then *Approve my class result* once every subject is approved and
    every student is complete. Marks and remarks are then locked.
 4. **Final approval** (principal): *Give final approval*, or *Reopen* with a reason (kept in the audit log)
    so marks can be corrected. With *Require principal approval* off in School settings, the class teacher's
    approval is final.
-5. **Result cards**: the printer icon prints one student's card, *Print all result cards* the whole class —
+5. **Result cards** (monthly or term, matching the result you are on): the printer icon prints one student's card, *Print all result cards* the whole class —
    A4, one card per page, in the class's own design (Class 1 → design 1 … Class 10 → design 10). Cards say
    **PROVISIONAL** until final approval; signature lines are left blank. In the browser's print dialog choose
    A4, margins *None* and *Background graphics*; *Save as PDF* to share. *Black & white preview* shows how a

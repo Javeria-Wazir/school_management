@@ -6,7 +6,7 @@ import { runAction } from "@/server/actions";
 import { requireUser } from "@/server/auth/current";
 import { classApproveResult, finalApproveResult, reopenResult, saveRemarks } from "@/server/services/results";
 
-type ResultKey = { examTermId: string; sectionId: string };
+type ResultKey = { examTermId: string; sectionId: string; stage: "monthly" | "term" };
 
 function refresh(key: ResultKey) {
   revalidatePath(`/results/${key.examTermId}/${key.sectionId}`);
@@ -44,7 +44,7 @@ export async function reopenAction(key: ResultKey, reason: string): Promise<Acti
 export async function saveRemarksAction(key: ResultKey, enrollmentId: string, remarks: string): Promise<ActionResult> {
   const ctx = await requireUser();
   return runAction(async () => {
-    await saveRemarks(ctx, { examTermId: key.examTermId, enrollmentId, remarks });
+    await saveRemarks(ctx, { examTermId: key.examTermId, stage: key.stage, enrollmentId, remarks });
     refresh(key);
     return { message: remarks.trim() ? "Remarks saved." : "Remarks removed." };
   });

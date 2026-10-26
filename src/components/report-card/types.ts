@@ -40,6 +40,8 @@ export interface CardView {
   /** CSS filter for the black-and-white preview ("none" or "grayscale(1)"). */
   bw: string;
   termName: string;
+  /** Monthly result card: only the Monthly Test, so the Monthly/Term columns are hidden. */
+  monthlyOnly: boolean;
   yearName: string;
   className: string;
   /** Class name without a leading "Class " (e.g. "6"). */

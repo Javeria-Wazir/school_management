@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireUser } from "@/server/auth/current";
 import { getCapabilities } from "@/server/services/capabilities";
 import { resolveExamTerm } from "@/server/services/exam-terms";
-import { listMarkSheets, type MarkSheetRow } from "@/server/services/marks";
+import { listMarkSheets, type MarkSheetRow, type SheetStatus, type StageCell } from "@/server/services/marks";
 
 export const metadata = { title: "Marks entry" };
 
@@ -49,7 +49,9 @@ export default async function MarksPage({ searchParams }: PageProps<"/marks">) {
     const classOptions = [...new Map(all.map((r) => [r.classId, { value: r.classId, label: r.className }])).values()];
     const classId = typeof params.class === "string" && classOptions.some((c) => c.value === params.class) ? params.class : undefined;
     const shown = all.filter((r) => !classId || r.classId === classId);
-    const count = (status: MarkSheetRow["status"][]) => all.filter((r) => status.includes(r.status)).length;
+    // Every applicable sheet: each subject has a Monthly Test sheet and a term sheet.
+    const cells = all.flatMap((r) => [r.monthly, r.term]).filter((c) => c.components > 0);
+    const count = (status: SheetStatus[]) => cells.filter((c) => status.includes(c.status)).length;
     return (
       <>
         <PageHeader title="Marks entry" description="Every subject of every class for this term. Teachers enter their own marks; you can open any sheet and enter marks on a teacher's behalf." />
@@ -58,7 +60,7 @@ export default async function MarksPage({ searchParams }: PageProps<"/marks">) {
           {classOptions.length ? <UrlSelect param="class" label="Class" value={classId} options={classOptions} allLabel="All classes" /> : null}
         </div>
         <div className="grid gap-4 sm:grid-cols-4">
-          <StatCard label="Subject sheets" value={all.length} hint={`${selected.name}, ${yearName}`} />
+          <StatCard label="Mark sheets" value={cells.length} hint={`Monthly Test and term, ${selected.name}`} />
           <StatCard label="Not started or draft" value={count(["not_started", "draft"])} />
           <StatCard label="Waiting for review" value={count(["submitted", "under_review"])} hint="Class teachers approve these" />
           <StatCard label="Approved" value={count(["approved"])} hint={count(["returned"]) ? `${count(["returned"])} returned for correction` : undefined} />
@@ -72,10 +74,13 @@ export default async function MarksPage({ searchParams }: PageProps<"/marks">) {
     listMarkSheets(ctx, { examTermId: selected.id, scope: "mine" }),
     caps.classTeacherSectionIds.length ? listMarkSheets(ctx, { examTermId: selected.id, scope: "class" }) : Promise.resolve([]),
   ]);
-  const waiting = review.filter((r) => r.status === "submitted" || r.status === "under_review").length;
+  const waiting = review.flatMap((r) => [r.monthly, r.term]).filter((c) => c.status === "submitted" || c.status === "under_review").length;
   return (
     <>
-      <PageHeader title="Marks entry" description="Enter Monthly and Term marks for your subjects. Save as often as you like; submit when every mark is in." />
+      <PageHeader
+        title="Marks entry"
+        description="Enter the Monthly Test first and submit it — the monthly result can be published straight away. Enter the term examination when it is held; the term result then combines both."
+      />
       <div className="flex flex-wrap items-end gap-3">{termSelect}</div>
       <Card>
         <CardHeader>
@@ -119,50 +124,56 @@ function SheetTable({ rows, showTeacher, actionLabel }: { rows: MarkSheetRow[]; 
             <TableHead>Class</TableHead>
             <TableHead>Subject</TableHead>
             {showTeacher ? <TableHead>Subject teacher</TableHead> : null}
-            <TableHead className="min-w-40">Marks entered</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">
-              <span className="sr-only">Action</span>
-            </TableHead>
+            <TableHead className="min-w-52">Monthly Test</TableHead>
+            <TableHead className="min-w-52">Term examination</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r) => {
-            const expected = r.students * r.components;
-            return (
-              <TableRow key={`${r.sectionId}-${r.classSubjectId}`}>
-                <TableCell className="whitespace-nowrap">
-                  {r.className} <Badge variant="secondary">{r.sectionName}</Badge>
-                </TableCell>
-                <TableCell>
-                  {r.subjectName} <span className="text-xs text-muted-foreground">{r.subjectCode}</span>
-                </TableCell>
-                {showTeacher ? <TableCell>{r.teacherName ?? <span className="text-muted-foreground">Not assigned</span>}</TableCell> : null}
-                <TableCell>
-                  {r.components === 0 ? (
-                    <span className="text-xs text-muted-foreground">No maximum marks set for this term</span>
-                  ) : (
-                    <div className="space-y-1">
-                      <Progress value={expected ? (r.entered / expected) * 100 : 0} aria-label={`${r.entered} of ${expected} marks entered`} />
-                      <p className="text-xs tabular-nums text-muted-foreground">
-                        {r.entered} of {expected}
-                      </p>
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <SheetStatusBadge status={r.status} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button asChild size="sm" variant={r.status === "submitted" && actionLabel === "Review" ? "default" : "outline"}>
-                    <Link href={`/marks/${r.examTermId}/${r.sectionId}/${r.classSubjectId}`}>{actionLabel}</Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {rows.map((r) => (
+            <TableRow key={`${r.sectionId}-${r.classSubjectId}`}>
+              <TableCell className="whitespace-nowrap">
+                {r.className} <Badge variant="secondary">{r.sectionName}</Badge>
+              </TableCell>
+              <TableCell>
+                {r.subjectName} <span className="text-xs text-muted-foreground">{r.subjectCode}</span>
+              </TableCell>
+              {showTeacher ? <TableCell>{r.teacherName ?? <span className="text-muted-foreground">Not assigned</span>}</TableCell> : null}
+              <TableCell>
+                <StageCellView row={r} stage="monthly" cell={r.monthly} actionLabel={actionLabel} />
+              </TableCell>
+              <TableCell>
+                <StageCellView row={r} stage="term" cell={r.term} actionLabel={actionLabel} />
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+function StageCellView({ row, stage, cell, actionLabel }: { row: MarkSheetRow; stage: "monthly" | "term"; cell: StageCell; actionLabel: string }) {
+  if (cell.components === 0) return <span className="text-xs text-muted-foreground">No maximum marks set</span>;
+  const expected = row.students * cell.components;
+  const label = stage === "monthly" ? "Monthly Test" : "term examination";
+  return (
+    <div className="flex items-center gap-3">
+      <div className="min-w-24 flex-1 space-y-1">
+        <SheetStatusBadge status={cell.status} />
+        <Progress value={expected ? (cell.entered / expected) * 100 : 0} aria-label={`${label}: ${cell.entered} of ${expected} marks entered`} />
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {cell.entered} of {expected}
+        </p>
+      </div>
+      <Button asChild size="sm" variant={cell.status === "submitted" && actionLabel === "Review" ? "default" : "outline"}>
+        <Link href={`/marks/${row.examTermId}/${row.sectionId}/${row.classSubjectId}?stage=${stage}`}>
+          {actionLabel}
+          <span className="sr-only">
+            {" "}
+            {row.subjectName} {label}
+          </span>
+        </Link>
+      </Button>
     </div>
   );
 }

@@ -67,6 +67,8 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
   const entered = sheet.students.reduce((n, s) => n + sheet.components.filter((c) => (values[key(s.enrollmentId, c.assessmentId)] ?? "") !== "").length, 0);
   const missing = sheet.expected - entered;
   const maxTotal = sheet.components.reduce((sum, c) => sum.plus(c.maxMarks), new Dec(0));
+  // A total column only helps when the sheet has more than one component.
+  const showTotal = sheet.components.length > 1;
 
   async function save(): Promise<boolean> {
     if (clientErrors.length) {
@@ -164,10 +166,12 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
                         <span className="block text-xs font-normal text-muted-foreground">out of {new Dec(c.maxMarks).toString()}</span>
                       </TableHead>
                     ))}
-                    <TableHead className="w-28 text-center">
-                      Total
-                      <span className="block text-xs font-normal text-muted-foreground">out of {maxTotal.toString()}</span>
-                    </TableHead>
+                    {showTotal ? (
+                      <TableHead className="w-28 text-center">
+                        Total
+                        <span className="block text-xs font-normal text-muted-foreground">out of {maxTotal.toString()}</span>
+                      </TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -226,9 +230,11 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
                             </TableCell>
                           );
                         })}
-                        <TableCell className="text-center font-medium tabular-nums">
-                          {total ? total.toString() : <span className="text-xs font-normal text-muted-foreground">—</span>}
-                        </TableCell>
+                        {showTotal ? (
+                          <TableCell className="text-center font-medium tabular-nums">
+                            {total ? total.toString() : <span className="text-xs font-normal text-muted-foreground">—</span>}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     );
                   })}

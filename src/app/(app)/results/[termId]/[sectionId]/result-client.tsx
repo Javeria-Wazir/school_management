@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/lib/action-result";
 import { classApproveAction, finalApproveAction, reopenAction, saveRemarksAction } from "./actions";
 
-type ResultKey = { examTermId: string; sectionId: string };
+type ResultKey = { examTermId: string; sectionId: string; stage: "monthly" | "term" };
 
 /** A reason/remarks dialog: a textarea, its error, and a save button that keeps the dialog open on failure. */
 function TextDialog({

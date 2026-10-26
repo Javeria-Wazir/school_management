@@ -32,10 +32,17 @@ export const enrollmentStatus = pgEnum("enrollment_status", ["active", "withdraw
 export const markSheetStatus = pgEnum("mark_sheet_status", ["draft", "submitted", "under_review", "approved", "returned"]);
 export const correctionStatus = pgEnum("correction_status", ["open", "accepted", "rejected"]);
 export const resultStatus = pgEnum("result_status", ["open", "class_approved", "final_approved"]);
+/**
+ * A term is published in two stages. `monthly`: the Monthly Test component alone (its own mark sheets,
+ * result and cards). `term`: for mark sheets, the remaining components (Term Examination …); for
+ * results and remarks, the full term result built from both stages.
+ */
+export const resultStage = pgEnum("result_stage", ["monthly", "term"]);
 
 export type UserRole = (typeof userRole.enumValues)[number];
 export type MarkSheetStatus = (typeof markSheetStatus.enumValues)[number];
 export type ResultApprovalStatus = (typeof resultStatus.enumValues)[number];
+export type ResultStage = (typeof resultStage.enumValues)[number];
 
 const tz = { withTimezone: true } as const;
 const createdAt = () => timestamp("created_at", tz).notNull().defaultNow();
@@ -370,6 +377,8 @@ export const markSheets = pgTable(
     examTermId: uuid("exam_term_id").notNull().references(() => examTerms.id, { onDelete: "restrict" }),
     sectionId: uuid("section_id").notNull().references(() => sections.id, { onDelete: "restrict" }),
     classSubjectId: uuid("class_subject_id").notNull().references(() => classSubjects.id, { onDelete: "restrict" }),
+    /** Which components the sheet holds: the Monthly Test, or the other (term) components. */
+    stage: resultStage("stage").notNull().default("term"),
     status: markSheetStatus("status").notNull().default("draft"),
     /** Overrides the term's marks deadline when set. */
     deadline: date("deadline"),
@@ -384,7 +393,7 @@ export const markSheets = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    unique("mark_sheets_unique").on(t.examTermId, t.sectionId, t.classSubjectId),
+    unique("mark_sheets_stage_unique").on(t.examTermId, t.sectionId, t.classSubjectId, t.stage),
     index("mark_sheets_section_term_idx").on(t.sectionId, t.examTermId),
   ],
 );
@@ -442,6 +451,8 @@ export const resultApprovals = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     examTermId: uuid("exam_term_id").notNull().references(() => examTerms.id, { onDelete: "restrict" }),
     sectionId: uuid("section_id").notNull().references(() => sections.id, { onDelete: "restrict" }),
+    /** `monthly` = the monthly result; `term` = the full term result (monthly + term components). */
+    stage: resultStage("stage").notNull().default("term"),
     status: resultStatus("status").notNull().default("open"),
     classApprovedBy: uuid("class_approved_by").references(() => users.id),
     classApprovedAt: timestamp("class_approved_at", tz),
@@ -454,7 +465,7 @@ export const resultApprovals = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [unique("result_approvals_unique").on(t.examTermId, t.sectionId)],
+  (t) => [unique("result_approvals_stage_unique").on(t.examTermId, t.sectionId, t.stage)],
 );
 
 export const studentRemarks = pgTable(
@@ -463,13 +474,15 @@ export const studentRemarks = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     examTermId: uuid("exam_term_id").notNull().references(() => examTerms.id, { onDelete: "restrict" }),
     enrollmentId: uuid("enrollment_id").notNull().references(() => enrollments.id, { onDelete: "restrict" }),
+    /** Remarks for the monthly result card or the term result card. */
+    stage: resultStage("stage").notNull().default("term"),
     remarks: text("remarks").notNull(),
     writtenBy: uuid("written_by").references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    unique("student_remarks_unique").on(t.examTermId, t.enrollmentId),
+    unique("student_remarks_stage_unique").on(t.examTermId, t.enrollmentId, t.stage),
     check("student_remarks_length", sql`length(remarks) <= 500`),
   ],
 );

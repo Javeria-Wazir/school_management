@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app/page";
 import { SheetStatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
 import { getMarkSheet } from "@/server/services/marks";
@@ -11,12 +12,15 @@ import { MarksGrid } from "./marks-grid";
 
 export const metadata = { title: "Enter marks" };
 
-export default async function MarkSheetPage({ params }: PageProps<"/marks/[termId]/[sectionId]/[classSubjectId]">) {
+const STAGE_LABEL = { monthly: "Monthly Test", term: "Term examination" } as const;
+
+export default async function MarkSheetPage({ params, searchParams }: PageProps<"/marks/[termId]/[sectionId]/[classSubjectId]">) {
   const ctx = await requireUser();
   const { termId, sectionId, classSubjectId } = await params;
+  const stage = (await searchParams).stage === "term" ? "term" : "monthly";
   let sheet;
   try {
-    sheet = await getMarkSheet(ctx, { examTermId: termId, sectionId, classSubjectId });
+    sheet = await getMarkSheet(ctx, { examTermId: termId, sectionId, classSubjectId, stage });
   } catch (error) {
     if (error instanceof AppError && (error.code === "NOT_FOUND" || error.code === "VALIDATION")) notFound();
     if (error instanceof AppError && error.code === "FORBIDDEN") {
@@ -40,7 +44,7 @@ export default async function MarkSheetPage({ params }: PageProps<"/marks/[termI
         </Link>
       </Button>
       <PageHeader
-        title={`${sheet.subjectName} · ${sheet.className} ${sheet.sectionName}`}
+        title={`${sheet.subjectName} · ${sheet.className} ${sheet.sectionName} · ${STAGE_LABEL[stage]}`}
         description={
           <>
             {sheet.termName}, {sheet.yearName} · Subject teacher: {sheet.teacherName ?? "not assigned"}
@@ -49,7 +53,24 @@ export default async function MarkSheetPage({ params }: PageProps<"/marks/[termI
         }
         actions={<SheetStatusBadge status={sheet.status} className="text-sm" />}
       />
-      <MarksGrid sheet={sheet} />
+      <nav aria-label="Marks stage" className="flex flex-wrap gap-2">
+        {sheet.stages
+          .filter((s) => s.components > 0)
+          .map((s) => (
+            <Link
+              key={s.stage}
+              href={`/marks/${termId}/${sectionId}/${classSubjectId}?stage=${s.stage}`}
+              aria-current={s.stage === stage ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-muted/50",
+                s.stage === stage && "border-primary bg-primary/5 font-medium",
+              )}
+            >
+              {STAGE_LABEL[s.stage]} <SheetStatusBadge status={s.status} />
+            </Link>
+          ))}
+      </nav>
+      <MarksGrid key={stage} sheet={sheet} />
     </>
   );
 }

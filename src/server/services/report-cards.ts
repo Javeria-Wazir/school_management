@@ -93,9 +93,12 @@ export interface ReportCardSet {
  */
 export async function buildReportCards(
   ctx: ServiceContext,
-  input: { examTermId: unknown; sectionId: unknown; enrollmentId?: string; blackAndWhite?: boolean },
+  input: { examTermId: unknown; sectionId: unknown; stage: unknown; enrollmentId?: string; blackAndWhite?: boolean },
 ): Promise<ReportCardSet> {
-  const result = await getClassResult(ctx, { examTermId: input.examTermId, sectionId: input.sectionId });
+  const result = await getClassResult(ctx, { examTermId: input.examTermId, sectionId: input.sectionId, stage: input.stage });
+  const monthlyOnly = result.stage === "monthly";
+  // A monthly card shows only the Monthly Test, under a title that says so.
+  const termName = monthlyOnly ? `${result.term.name} · Monthly Test` : result.term.name;
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const theme = themeForClass(result.section.className, result.section.classSortOrder);
@@ -122,7 +125,8 @@ export async function buildReportCards(
       accentSoft: softColor(theme.accent, theme.softAlpha),
       accentLight: lightColor(theme.accent, 0.55),
       bw: input.blackAndWhite ? "grayscale(1)" : "none",
-      termName: result.term.name,
+      termName,
+      monthlyOnly,
       yearName: result.term.yearName.replace("-", "–"),
       className: result.section.className,
       classNo,
@@ -157,5 +161,5 @@ export async function buildReportCards(
     return { enrollmentId: student.enrollmentId, studentName: student.fullName, view };
   });
 
-  return { theme, classLabel: `${result.section.className} – ${result.section.name}`, termName: result.term.name, official, cards };
+  return { theme, classLabel: `${result.section.className} – ${result.section.name}`, termName, official, cards };
 }

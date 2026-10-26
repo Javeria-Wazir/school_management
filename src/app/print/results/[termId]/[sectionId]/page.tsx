@@ -14,9 +14,10 @@ export default async function PrintResultsPage({ params, searchParams }: PagePro
   const query = await searchParams;
   const student = typeof query.student === "string" ? query.student : undefined;
   const blackAndWhite = query.bw === "1";
+  const stage = query.stage === "term" ? "term" : "monthly";
   let set;
   try {
-    set = await buildReportCards(ctx, { examTermId: termId, sectionId, enrollmentId: student, blackAndWhite });
+    set = await buildReportCards(ctx, { examTermId: termId, sectionId, stage, enrollmentId: student, blackAndWhite });
   } catch (error) {
     if (error instanceof AppError && (error.code === "NOT_FOUND" || error.code === "VALIDATION")) notFound();
     if (error instanceof AppError && error.code === "FORBIDDEN") {
@@ -41,7 +42,7 @@ export default async function PrintResultsPage({ params, searchParams }: PagePro
         subtitle={`${set.cards.length === 1 ? set.cards[0].studentName : `${set.cards.length} result cards`} · Theme: ${set.theme.name}`}
         official={set.official}
         blackAndWhite={blackAndWhite}
-        backHref={`/results/${termId}/${sectionId}`}
+        backHref={`/results/${termId}/${sectionId}?stage=${stage}`}
         empty={set.cards.length === 0}
       />
       <main className="rc-pages">
