@@ -60,6 +60,9 @@ export interface CardView {
   gradeRemark: string;
   /** "PASS", "FAIL" or "INCOMPLETE". */
   result: string;
+  /** Class position, e.g. "3rd of 21"; shown only when School settings ask for it and the result is complete. */
+  position: string;
+  showPosition: boolean;
   resultNote: string;
   passed: boolean;
   failed: boolean;

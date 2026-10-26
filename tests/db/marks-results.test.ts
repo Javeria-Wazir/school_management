@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "@/server/db/schema";
 import { approveMarkSheet, cellKey, getMarkSheet, listMarkSheets, returnMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
-import { buildReportCards, gradeLegend } from "@/server/services/report-cards";
+import { buildReportCards, gradeLegend, ordinal } from "@/server/services/report-cards";
 import { classApproveResult, finalApproveResult, getClassResult, listClassResults, reopenResult, saveRemarks } from "@/server/services/results";
 import { addUser, createTestDb, rejectsWith, seedSchool, type TestDb } from "./helpers";
 
@@ -240,6 +240,23 @@ describe("term result", () => {
     const view = await getClassResult(s.admin, termResult);
     expect(view.students.find((st) => st.fullName === "Late Joiner")!.position).toBeNull();
     expect(view.access.canClassApprove).toBe(false);
+  });
+
+  it("prints class position only when the school asks for it, and never for an incomplete student", async () => {
+    const hidden = await buildReportCards(s.admin, termResult);
+    expect(hidden.cards.every((c) => !c.view.showPosition)).toBe(true);
+    await t.db.update(schema.schoolSettings).set({ showClassPosition: true });
+    const shown = await buildReportCards(s.admin, termResult);
+    expect(shown.cards.map((c) => [c.studentName, c.view.showPosition, c.view.position])).toEqual([
+      ["Student One", true, "1st of 3"],
+      ["Student Two", true, "2nd of 3"],
+      ["Late Joiner", false, ""],
+    ]);
+    await t.db.update(schema.schoolSettings).set({ showClassPosition: false });
+  });
+
+  it("writes positions as ordinals", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st", "111th"]);
   });
 
   it("describes the grade bands", async () => {

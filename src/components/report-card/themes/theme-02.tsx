@@ -402,6 +402,7 @@ export function Theme02({ v }: { v: CardView }) {
             >
               {v.result}
             </div>
+            {v.showPosition ? <div style={{ fontSize: "12.5px", fontWeight: "800", marginTop: "2px" }}>Position {v.position}</div> : null}
           </div>
         </div>
 

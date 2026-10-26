@@ -22,6 +22,13 @@ function formatCardDate(date: Date): string {
 
 const trim = (d: { toString(): string }) => formatNumber(d.toString(), 2);
 
+/** 1 → "1st", 2 → "2nd", 3 → "3rd", 11 → "11th", 22 → "22nd". */
+export function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
 /** "A+ 90–100 · A 80–89 · … · F below 33" from the term's grade bands. */
 export function gradeLegend(rules: GradingRules): string {
   return rules.bands
@@ -143,6 +150,9 @@ export async function buildReportCards(
       grade: o.grade?.grade ?? "—",
       gradeRemark: o.grade?.remark ?? (incomplete ? "Result incomplete" : ""),
       result: o.status === "Pass" ? "PASS" : o.status === "Fail" ? "FAIL" : "INCOMPLETE",
+      // Ranked against the whole class (ties share a place: 1st, 2nd, 2nd, 4th); none while incomplete.
+      position: student.position === null ? "" : `${ordinal(student.position)} of ${result.students.length}`,
+      showPosition: settings.showClassPosition && student.position !== null,
       resultNote: o.status === "Pass" ? "Well done!" : o.status === "Fail" ? "Needs improvement" : "Some marks are missing",
       passed: o.status === "Pass",
       failed: o.status === "Fail",

@@ -495,6 +495,9 @@ export function Theme07({ v }: { v: CardView }) {
               </div>
             </>
           ) : null}
+          {v.showPosition ? (
+            <div style={{ marginTop: "8px", fontSize: "12.5px", color: "#1B2633", fontWeight: "700" }}>Class position: {v.position}</div>
+          ) : null}
 
           <div
             style={{
