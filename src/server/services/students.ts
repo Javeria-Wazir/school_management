@@ -1,7 +1,7 @@
 /** Students (permanent record) and enrolments (student × academic year → class, section, roll number). */
 import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { idSchema } from "@/lib/validation/common";
-import { createStudentSchema, enrollmentSchema, studentStatusSchema, updateEnrollmentSchema, updateStudentSchema } from "@/lib/validation/academics";
+import { createStudentSchema, studentStatusSchema, updateEnrollmentSchema, updateStudentSchema } from "@/lib/validation/academics";
 import { normalizePhone } from "@/lib/validation/phone";
 import type { Db, Tx } from "@/server/db/client";
 import { withActor } from "@/server/db/actor";
@@ -148,20 +148,6 @@ export async function setStudentStatus(ctx: ServiceContext, input: unknown): Pro
     if (status !== "active") {
       await tx.update(enrollments).set({ status: "withdrawn" }).where(and(eq(enrollments.studentId, id), eq(enrollments.status, "active")));
     }
-  });
-}
-
-/** Enrol an existing (active) student in a year. */
-export async function enrollStudent(ctx: ServiceContext, input: unknown): Promise<{ id: string }> {
-  assertAdmin(ctx.user);
-  const data = parseInput(enrollmentSchema, input);
-  return withActor(ctx.db, ctx.user.id, async (tx) => {
-    const [student] = await tx.select({ status: students.status }).from(students).where(eq(students.id, data.studentId));
-    if (!student) throw notFound("Student");
-    if (student.status !== "active") throw new AppError("RULE", `This student is ${student.status}. Make them active before enrolling.`);
-    const { classId } = await sectionInYear(tx, data.sectionId, data.academicYearId);
-    const [row] = await tx.insert(enrollments).values({ ...data, classId }).returning({ id: enrollments.id });
-    return row;
   });
 }
 

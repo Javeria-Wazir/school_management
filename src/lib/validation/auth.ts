@@ -10,7 +10,7 @@ export const staffEmailSchema = z
 export const staffNameSchema = z.string().trim().min(1, "Enter the full name").max(120, "Name is too long (max 120 characters)");
 
 /** International format, e.g. +923001234567 — needed for WhatsApp links. */
-export const phoneSchema = z
+const phoneSchema = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s()-]/g, ""))

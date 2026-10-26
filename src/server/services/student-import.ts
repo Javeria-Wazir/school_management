@@ -19,12 +19,12 @@ import { assertAdmin, type ServiceContext } from "./guards";
 import { getCountryCode } from "./students";
 import { parseInput } from "./validate";
 
-export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
-export const IMPORT_MAX_ROWS = 2000;
+const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const IMPORT_MAX_ROWS = 2000;
 
 export type ImportField = "studentCode" | "fullName" | "guardianName" | "guardianPhone" | "dateOfBirth" | "className" | "sectionName" | "rollNumber";
 
-export const IMPORT_COLUMNS: { field: ImportField; header: string; required: boolean; aliases: string[] }[] = [
+const IMPORT_COLUMNS: { field: ImportField; header: string; required: boolean; aliases: string[] }[] = [
   { field: "studentCode", header: "Student ID", required: true, aliases: ["studentid", "studentcode", "admissionno", "admissionnumber", "grno", "regno", "registrationno"] },
   { field: "fullName", header: "Full Name", required: true, aliases: ["fullname", "name", "studentname"] },
   { field: "className", header: "Class", required: true, aliases: ["class", "classname"] },
@@ -155,7 +155,7 @@ async function readTable(bytes: Uint8Array, fileName: string): Promise<string[][
 }
 
 /** Turn a file into rows keyed by field. Throws for unusable files; missing columns are reported. */
-export async function parseStudentFile(bytes: Uint8Array, fileName: string): Promise<{ rows: ParsedRow[]; fileErrors: string[] }> {
+async function parseStudentFile(bytes: Uint8Array, fileName: string): Promise<{ rows: ParsedRow[]; fileErrors: string[] }> {
   if (bytes.length === 0) throw new AppError("VALIDATION", "The file is empty.");
   if (bytes.length > IMPORT_MAX_BYTES) throw new AppError("VALIDATION", "The file is larger than 2 MB. Split it into smaller files.");
   const table = await readTable(bytes, fileName);

@@ -115,7 +115,7 @@ PostgreSQL (PGlite), so constraints, triggers, permissions and workflow rules ar
 
 ## 3. Deploying to Vercel with Neon
 
-**Current deployment (Module 1, 25 Oct 2026):** https://school-results-iota.vercel.app — Vercel project
+**Current deployment (Modules 1–6 + monthly results, 26 Oct 2026):** https://school-results-iota.vercel.app — Vercel project
 `school-results` (account `javeria-wazir`), Neon database `neondb` (AWS us-east-2), code on
 https://github.com/Javeria-Wazir/school_management. Verified: `/api/health` reports the database OK, sign-in
 page served, protected pages redirect to sign-in.

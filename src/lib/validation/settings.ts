@@ -23,10 +23,9 @@ export const schoolSettingsSchema = z.object({
 });
 
 export const LOGO_MAX_BYTES = 500 * 1024;
-export const LOGO_TYPES = ["image/png", "image/jpeg"] as const;
 
 /** e.g. "2026-2027": consecutive years. */
-export const academicYearNameSchema = z
+const academicYearNameSchema = z
   .string()
   .trim()
   .regex(/^[0-9]{4}-[0-9]{4}$/, "Use the format 2026-2027")

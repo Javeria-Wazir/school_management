@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { optionalPhoneSchema, staffEmailSchema, staffNameSchema } from "./auth";
 
-export const roleSchema = z.enum(["admin", "teacher"], { message: "Choose a role" });
+const roleSchema = z.enum(["admin", "teacher"], { message: "Choose a role" });
 
 export const ROLE_LABELS = {
   admin: "Principal / Administrator",

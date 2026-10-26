@@ -225,18 +225,17 @@ only lay out data. `/print/results/[term]/[section]` renders them as A4 pages (`
 6. **Backups**: Neon point-in-time restore (plan dependent) plus a periodic `pg_dump` kept
    off-site.
 
-Nothing is deployed until real Neon and Vercel accounts are connected; the README lists the exact
-steps and how to verify each one.
+The app is deployed this way (README § 3 has the live URL and the exact steps to verify each one).
 
 ## 9. Module plan
 
 | # | Module | Status |
 |---|---|---|
-| 1 | Scaffold, schema + migrations + triggers, auth/sessions/RBAC, app shell, staff management, school settings, academic years, grading maths library | done (81 tests) |
-| 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | done (107 tests) |
+| 1 | Scaffold, schema + migrations + triggers, auth/sessions/RBAC, app shell, staff management, school settings, academic years, grading maths library | done |
+| 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | done |
 | 3 | Marks entry grid, drafts, submission, missing-mark detection | done |
 | 4 | Class teacher review, return/approve, consolidation, incomplete detection, remarks | done (correction requests to do) |
-| 5 | Class result sheet, class/principal approval, reopen | done (126 tests in all). To do: analytics and charts; snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result |
+| 5 | Class result sheet, class/principal approval, reopen | done (133 tests across all modules). To do: analytics and charts; snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result |
 | 6 | Themed A4 result cards | done. To do: Excel/CSV export, WhatsApp reminders |
 | 7 | Audit log viewer, security review, deployment hardening | |
 

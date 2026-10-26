@@ -128,7 +128,7 @@ function sheetAccess(user: SessionUser, c: SheetContext): SheetAccess & { canVie
 export const stageOfCode = (code: string): ResultStage => (code === "MONTHLY" ? "monthly" : "term");
 
 /** The components of one stage: the Monthly Test alone, or every other component. */
-export const stageFilter = (stage: ResultStage) => (stage === "monthly" ? eq(assessmentTypes.code, "MONTHLY") : ne(assessmentTypes.code, "MONTHLY"));
+const stageFilter = (stage: ResultStage) => (stage === "monthly" ? eq(assessmentTypes.code, "MONTHLY") : ne(assessmentTypes.code, "MONTHLY"));
 
 async function loadComponents(db: Db | Tx, examTermId: string, classSubjectId: string, stage: ResultStage) {
   return db
@@ -287,8 +287,6 @@ export interface MarkSheetView {
   deadline: string | null;
   status: SheetStatus;
   returnReason: string | null;
-  submittedAt: Date | null;
-  approvedAt: Date | null;
   resultLocked: boolean;
   allowDecimals: boolean;
   decimalPlaces: number;
@@ -345,8 +343,6 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     deadline: c.sheet?.deadline ?? c.term.marksDeadline,
     status: c.sheet?.status ?? "not_started",
     returnReason: c.sheet?.status === "returned" ? c.sheet.returnReason : null,
-    submittedAt: c.sheet?.submittedAt ?? null,
-    approvedAt: c.sheet?.approvedAt ?? null,
     resultLocked: c.resultLocked,
     allowDecimals: settings.allowDecimals,
     decimalPlaces: settings.places,

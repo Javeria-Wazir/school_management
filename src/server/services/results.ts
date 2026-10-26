@@ -46,7 +46,7 @@ import { sheetStatusesForSection, stageOfCode, submittedMarksForSection } from "
 import { parseInput } from "./validate";
 
 /** Mark sheet stages a result is built from. */
-export const sheetStagesFor = (stage: ResultStage): ResultStage[] => (stage === "monthly" ? ["monthly"] : ["monthly", "term"]);
+const sheetStagesFor = (stage: ResultStage): ResultStage[] => (stage === "monthly" ? ["monthly"] : ["monthly", "term"]);
 
 export interface ResultSubjectSheet {
   stage: ResultStage;
@@ -100,8 +100,6 @@ export interface ClassResultView {
   /** Status of the other stage's result, for the page's switch. */
   otherStageStatus: ResultApprovalStatus;
   requirePrincipalApproval: boolean;
-  /** Subjects of the class left out of this result: no maximum marks (term) or no Monthly Test (monthly). */
-  unconfiguredSubjects: string[];
   readiness: { sheetsApproved: number; sheetsTotal: number; studentsComplete: number; studentsTotal: number; blockers: string[] };
   access: { isAdmin: boolean; isClassTeacher: boolean; canClassApprove: boolean; canFinalApprove: boolean; canReopen: boolean; canEditRemarks: boolean };
 }
@@ -309,7 +307,6 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     approval,
     otherStageStatus,
     requirePrincipalApproval: settings.requirePrincipalApproval,
-    unconfiguredSubjects,
     readiness: { sheetsApproved, sheetsTotal: neededSheets.length, studentsComplete, studentsTotal: resultStudents.length, blockers },
     access: {
       isAdmin,

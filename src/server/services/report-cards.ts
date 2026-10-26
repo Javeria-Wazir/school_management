@@ -16,7 +16,7 @@ const SCIENCE = new Set(["CHEM", "BIO", "PHY"]);
 /** Dates on cards are shown in the school's time zone. */
 const TIME_ZONE = process.env.SCHOOL_TIME_ZONE || "Asia/Karachi";
 
-export function formatCardDate(date: Date): string {
+function formatCardDate(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: TIME_ZONE }).format(date);
 }
 
@@ -57,7 +57,7 @@ function buildRows(result: ClassResultView, student: ResultStudent, places: numb
       n: i + 1,
       name: subject.name,
       code: subject.code,
-      icon: ICONS.has(subject.code) ? `/report-card/subj-${subject.code === "MATHS" ? "maths" : subject.code.toLowerCase()}.svg` : "/report-card/subj-generic.svg",
+      icon: ICONS.has(subject.code) ? `/report-card/subj-${subject.code.toLowerCase()}.svg` : "/report-card/subj-generic.svg",
       m: mark(monthly?.id),
       mm: monthly ? formatNumber(monthly.max, places) : "—",
       t: mark(termExam?.id),

@@ -3,12 +3,12 @@ import { z } from "zod";
 import { idSchema } from "./common";
 
 /** `monthly` = the Monthly Test; `term` = the term components (sheets) or the full term result (results). */
-export const stageSchema = z.enum(["monthly", "term"], { message: "Unknown result stage" });
+const stageSchema = z.enum(["monthly", "term"], { message: "Unknown result stage" });
 
 export const sheetKeySchema = z.object({ examTermId: idSchema, sectionId: idSchema, classSubjectId: idSchema, stage: stageSchema });
 
 /** One cell of the marks grid. A blank value means "not entered" (missing); "0" is a real score. */
-export const markCellSchema = z.object({
+const markCellSchema = z.object({
   enrollmentId: idSchema,
   assessmentId: idSchema,
   value: z.string().trim().max(12, "Too long"),
@@ -18,7 +18,7 @@ export const saveMarksSchema = sheetKeySchema.extend({
   marks: z.array(markCellSchema).max(5000, "Too many marks in one save"),
 });
 
-export const reasonSchema = z
+const reasonSchema = z
   .string()
   .trim()
   .min(5, "Please give a reason (at least 5 characters)")

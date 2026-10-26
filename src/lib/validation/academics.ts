@@ -27,7 +27,7 @@ export const updateSectionSchema = z.object({
   isActive: checkboxSchema,
 });
 
-export const subjectCodeSchema = z
+const subjectCodeSchema = z
   .string()
   .trim()
   .toUpperCase()
@@ -67,7 +67,7 @@ export const rollNumberSchema = z.coerce
   .max(99999, "Roll number is too large");
 
 /** Phone numbers are normalised by the service (local 03xx… numbers get the school's country code). */
-export const studentSchema = z.object({
+const studentSchema = z.object({
   studentCode: studentCodeSchema,
   fullName: z.string().trim().min(1, "Enter the student's name").max(120, "Use at most 120 characters"),
   guardianName: z.preprocess(emptyToUndefined, z.string().trim().max(120, "Use at most 120 characters").optional()),
@@ -82,13 +82,6 @@ export const createStudentSchema = studentSchema.extend({
 });
 
 export const updateStudentSchema = studentSchema.extend({ id: idSchema });
-
-export const enrollmentSchema = z.object({
-  studentId: idSchema,
-  academicYearId: idSchema,
-  sectionId: idSchema,
-  rollNumber: rollNumberSchema,
-});
 
 export const updateEnrollmentSchema = z.object({
   id: idSchema,
@@ -138,7 +131,7 @@ export const updateExamTermSchema = z
   .refine((v) => !v.startDate || !v.endDate || v.endDate >= v.startDate, { path: ["endDate"], message: "The end date must be on or after the start date" });
 
 /** Up to 1000, at most 2 decimal places, as a string for numeric columns. */
-export const maxMarksSchema = z
+const maxMarksSchema = z
   .string()
   .trim()
   .regex(/^\d{1,4}(\.\d{1,2})?$/, "Enter a number such as 25 or 12.5")
@@ -162,7 +155,7 @@ const percentSchema = z
   .regex(/^\d{1,3}(\.\d{1,2})?$/, "Enter a percentage such as 33 or 32.5")
   .refine((v) => Number(v) >= 0 && Number(v) <= 100, "Use 0 to 100");
 
-export const gradeBandSchema = z.object({
+const gradeBandSchema = z.object({
   grade: z.string().trim().min(1, "Enter the grade").max(5, "Use at most 5 characters"),
   minPercentage: z.coerce.string().pipe(percentSchema),
   remark: z.string().trim().max(60, "Use at most 60 characters").default(""),

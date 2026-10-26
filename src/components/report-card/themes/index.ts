@@ -12,7 +12,7 @@ export interface ThemeMeta {
   softAlpha: number;
 }
 
-export const THEMES: readonly ThemeMeta[] = [
+const THEMES: readonly ThemeMeta[] = [
   { number: 1, name: "Little Stars", accent: "#F2B33D", softAlpha: 0.22 },
   { number: 2, name: "Bright Sprouts", accent: "#3FA36B", softAlpha: 0.16 },
   { number: 3, name: "Ocean Explorers", accent: "#2A9DA6", softAlpha: 0.16 },
