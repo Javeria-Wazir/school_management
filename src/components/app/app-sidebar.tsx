@@ -5,9 +5,11 @@ import {
   BookOpen,
   CalendarRange,
   ClipboardList,
+  FileSpreadsheet,
   GraduationCap,
   KeyRound,
   LayoutDashboard,
+  PenLine,
   School,
   Settings,
   UserCheck,
@@ -45,6 +47,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   assignments: UserCheck,
   terms: ClipboardList,
   grading: Award,
+  marks: PenLine,
+  results: FileSpreadsheet,
 };
 
 export function AppSidebar({ groups, schoolName, roleLabel }: { groups: NavGroup[]; schoolName: string; roleLabel: string }) {

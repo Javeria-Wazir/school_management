@@ -1,0 +1,59 @@
+/* A4 result cards: one 794 × 1123 px card (A4 at 96 dpi) per printed page. */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.rc-print-root {
+  min-height: 100vh;
+  background: #e5e9ef;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.rc-pages {
+  overflow-x: auto;
+  padding: 24px 16px 48px;
+}
+
+.rc-page {
+  width: 210mm;
+  height: 297mm;
+  margin: 0 auto 24px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(30, 42, 56, 0.18);
+  /* The designs were drawn on a plain page: undo the app's CSS reset inside the card. */
+  line-height: normal;
+  color: #1e2a38;
+}
+.rc-page *,
+.rc-page *::before,
+.rc-page *::after {
+  box-sizing: content-box;
+}
+.rc-page img,
+.rc-page svg {
+  display: inline;
+  max-width: none;
+  vertical-align: baseline;
+}
+
+@media print {
+  .rc-print-root {
+    background: #fff;
+    min-height: 0;
+  }
+  .rc-pages {
+    overflow: visible;
+    padding: 0;
+  }
+  .rc-page {
+    margin: 0;
+    box-shadow: none;
+    break-after: page;
+  }
+  .rc-page:last-child {
+    break-after: auto;
+  }
+}

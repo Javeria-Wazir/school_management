@@ -175,6 +175,18 @@ from the source marks.
   student is shown as **Incomplete**, never Pass/Fail.
 * Report cards are **official** only after final approval; anything earlier prints a
   *PROVISIONAL* watermark. Signature areas are always blank lines — no images.
+* Implemented so far (services `marks.ts`, `results.ts`, `report-cards.ts`): draft → submitted →
+  approved / returned, class approval, final approval, reopen, remarks. The class result compiles only
+  marks from submitted or approved sheets; a draft is still the teacher's working copy. The optional
+  *under_review* step and teacher-initiated correction requests are not built yet.
+
+### Result cards
+
+Ten approved designs in `src/components/report-card/themes/theme-01.tsx … theme-10.tsx`, one per
+class (the number in the class name picks the design). They were converted from the design-review
+canvas and edited by hand; `report-cards.ts` builds a formatted `CardView` (types.ts) so the designs
+only lay out data. `/print/results/[term]/[section]` renders them as A4 pages (`?student=` for one,
+`?bw=1` for a greyscale preview) with print CSS; the browser prints or saves them as PDF.
 
 ## 7. Grading maths (`src/lib/domain/calculations.ts`)
 
@@ -217,10 +229,10 @@ steps and how to verify each one.
 |---|---|---|
 | 1 | Scaffold, schema + migrations + triggers, auth/sessions/RBAC, app shell, staff management, school settings, academic years, grading maths library | done (81 tests) |
 | 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | done (107 tests) |
-| 3 | Subject teacher dashboard, marks entry grid, drafts, submission | next |
-| 4 | Class teacher review, corrections, return/approve, consolidation, incomplete detection | |
-| 5 | Class result sheet, class/principal approval, reopen, analytics and charts. Snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result | |
-| 6 | A4 PDF report cards, Excel/CSV export, WhatsApp reminders | |
+| 3 | Marks entry grid, drafts, submission, missing-mark detection | done |
+| 4 | Class teacher review, return/approve, consolidation, incomplete detection, remarks | done (correction requests to do) |
+| 5 | Class result sheet, class/principal approval, reopen | done (126 tests in all). To do: analytics and charts; snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result |
+| 6 | Themed A4 result cards | done. To do: Excel/CSV export, WhatsApp reminders |
 | 7 | Audit log viewer, security review, deployment hardening | |
 
 ## 10. Development and test databases

@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider defaultOpen={cookieStore.get("sidebar_state")?.value !== "false"}>
-      <AppSidebar groups={navigationFor({ isAdmin: caps.isAdmin })} schoolName={settings.schoolName} roleLabel={label} />
+      <AppSidebar groups={navigationFor({ isAdmin: caps.isAdmin, isClassTeacher: caps.classTeacherSectionIds.length > 0 })} schoolName={settings.schoolName} roleLabel={label} />
       <SidebarInset className="min-w-0">
         <header className="no-print sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-4">
           <SidebarTrigger aria-label="Toggle navigation" />

@@ -212,13 +212,35 @@ Delete the production strings from `.env.local` afterwards.
 7. **Grading scales**: adjust pass marks and grade bands, or create a scale for a particular term. A scale used
    by an approved result is locked.
 
+## 4a. Entering marks and publishing results
+
+1. **Marks entry** (subject teacher): open a subject, type the Monthly and Term marks (Enter moves down) and
+   *Save draft* as often as needed. A blank box is *missing*; 0 is a real mark. *Submit to class teacher* is
+   refused while any mark is missing. The principal can open any sheet and enter marks on a teacher's behalf;
+   the audit log records who did it.
+2. **Review** (class teacher): under *Marks entry → My class's subjects*, open a submitted subject and
+   *Approve marks* or *Return for correction* with a reason. Nobody approves marks they submitted themselves
+   (the principal approves a class teacher's own subject).
+3. **Class results** (class teacher): compiles every subject from the submitted marks — totals, percentage,
+   grade, pass/fail and position. A student with any missing mark is *Incomplete* (no total, grade or
+   position). Add each student's remarks, then *Approve my class result* once every subject is approved and
+   every student is complete. Marks and remarks are then locked.
+4. **Final approval** (principal): *Give final approval*, or *Reopen* with a reason (kept in the audit log)
+   so marks can be corrected. With *Require principal approval* off in School settings, the class teacher's
+   approval is final.
+5. **Result cards**: the printer icon prints one student's card, *Print all result cards* the whole class —
+   A4, one card per page, in the class's own design (Class 1 → design 1 … Class 10 → design 10). Cards say
+   **PROVISIONAL** until final approval; signature lines are left blank. In the browser's print dialog choose
+   A4, margins *None* and *Background graphics*; *Save as PDF* to share. *Black & white preview* shows how a
+   greyscale printer will print it.
+
 ## 5. Roles
 
 | Role | How | Can |
 |---|---|---|
 | Principal / Administrator | account role *Principal / Administrator* | everything school-wide: staff, structure, grading, settings, final approval, reopening, audit log |
-| Class Teacher | a *Teacher* account chosen as class teacher of a section | review, approve and return that section's subject sheets; consolidate; class-approve complete results; report cards |
-| Subject Teacher | a *Teacher* account assigned to section × subject | enter, save and submit marks for those assignments only; request corrections |
+| Class Teacher | a *Teacher* account chosen as class teacher of a section | review, approve and return that section's subject sheets; compile the class result; remarks; class-approve complete results; print result cards |
+| Subject Teacher | a *Teacher* account assigned to section × subject | enter, save and submit marks for those assignments only |
 
 One person can be both class teacher and subject teacher. Every permission is checked on the server for
 each request; hiding a button is only a convenience.
@@ -267,8 +289,8 @@ tests/unit, tests/db     Vitest; db tests run on PGlite with the real migrations
 |---|---|---|
 | 1 | Project setup, schema and migrations, authentication and sessions, server-side RBAC, app shell, staff accounts, school settings and logo, academic years, grading maths library | **Done** (tested) |
 | 2 | Classes, sections and class teachers, subjects and class subjects (compulsory / counts in total), students and enrolments with Excel/CSV import and validation report, teacher assignments, exam terms, mark components and per-term maximum marks, grading scales | **Done** (tested) |
-| 3 | Subject teacher dashboard, marks entry grid, drafts, submission, missing-mark detection | Next |
-| 4 | Class teacher review, return/approve, correction requests, consolidation of all subjects, incomplete results | Planned |
-| 5 | Class result sheet, class and principal approval, reopen with reason, subject analytics and charts | Planned |
-| 6 | A4 PDF report cards, Excel/CSV export, WhatsApp click-to-chat reminders | Planned |
+| 3 | Marks entry grid for subject teachers, drafts, submission, missing-mark detection | **Done** (tested) |
+| 4 | Class teacher review (approve / return with reason), compilation of all subjects, incomplete results, remarks | **Done** (tested); teacher-initiated correction requests still to do |
+| 5 | Class result sheet, class and principal approval, reopen with reason | **Done** (tested); subject analytics and charts still to do |
+| 6 | Themed A4 result cards (10 designs, print / save as PDF) | **Done** (tested); Excel/CSV export and WhatsApp reminders still to do |
 | 7 | Audit log viewer, final security review, deployment hardening | Planned |

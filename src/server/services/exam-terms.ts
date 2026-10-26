@@ -213,3 +213,18 @@ export async function setMaxMarks(ctx: ServiceContext, input: unknown): Promise<
     if (updated.length === 0) throw notFound("Assessment");
   });
 }
+
+/**
+ * Terms of the current academic year for marks and results pages, and the selected one: the
+ * requested term if valid, otherwise the school's current term, otherwise the first active term.
+ */
+export async function resolveExamTerm(db: Db, requested?: string | string[]): Promise<{ terms: ExamTermRow[]; selected: ExamTermRow | null; yearName: string | null }> {
+  const [settings] = await db
+    .select({ yearId: schoolSettings.currentAcademicYearId, yearName: sql<string | null>`(select y.name from academic_years y where y.id = ${schoolSettings.currentAcademicYearId})` })
+    .from(schoolSettings)
+    .where(eq(schoolSettings.id, 1));
+  if (!settings?.yearId) return { terms: [], selected: null, yearName: null };
+  const terms = (await listExamTerms(db, settings.yearId)).filter((t) => t.isActive);
+  const wanted = typeof requested === "string" ? terms.find((t) => t.id === requested) : undefined;
+  return { terms, selected: wanted ?? terms.find((t) => t.isCurrent) ?? terms[0] ?? null, yearName: settings.yearName };
+}

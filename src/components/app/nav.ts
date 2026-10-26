@@ -10,7 +10,9 @@ export type NavIcon =
   | "students"
   | "assignments"
   | "terms"
-  | "grading";
+  | "grading"
+  | "marks"
+  | "results";
 
 export interface NavItem {
   href: string;
@@ -25,10 +27,14 @@ export interface NavGroup {
 
 export interface NavCapabilities {
   isAdmin: boolean;
+  isClassTeacher: boolean;
 }
 
 export function navigationFor(caps: NavCapabilities): NavGroup[] {
   const groups: NavGroup[] = [{ label: "Overview", items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }] }];
+  const results: NavItem[] = [{ href: "/marks", label: "Marks entry", icon: "marks" }];
+  if (caps.isAdmin || caps.isClassTeacher) results.push({ href: "/results", label: "Class results", icon: "results" });
+  groups.push({ label: "Results", items: results });
   if (caps.isAdmin) {
     groups.push({
       label: "Academic setup",
