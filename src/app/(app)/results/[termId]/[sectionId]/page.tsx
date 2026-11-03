@@ -42,9 +42,10 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const { approval, readiness, access } = result;
-  const counts = { pass: 0, fail: 0, incomplete: 0 };
+  const counts = { pass: 0, fail: 0, incomplete: 0, absent: 0 };
   for (const s of result.students) {
-    if (s.outcome.status === "Pass") counts.pass += 1;
+    if (s.absentAll) counts.absent += 1;
+    else if (s.outcome.status === "Pass") counts.pass += 1;
     else if (s.outcome.status === "Fail") counts.fail += 1;
     else counts.incomplete += 1;
   }
@@ -144,7 +145,11 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <StatCard label="Mark sheets approved" value={`${readiness.sheetsApproved} / ${readiness.sheetsTotal}`} />
         <StatCard label="Students with all marks" value={`${readiness.studentsComplete} / ${readiness.studentsTotal}`} />
         <StatCard label="Passed" value={counts.pass} hint={readiness.studentsComplete ? undefined : "Shown once marks are complete"} />
-        <StatCard label="Failed" value={counts.fail} hint={counts.incomplete ? `${counts.incomplete} incomplete` : undefined} />
+        <StatCard
+          label="Failed"
+          value={counts.fail}
+          hint={[counts.incomplete ? `${counts.incomplete} incomplete` : "", counts.absent ? `${counts.absent} absent` : ""].filter(Boolean).join(" · ") || undefined}
+        />
       </div>
 
       <Card>
@@ -189,7 +194,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <CardHeader>
           <CardTitle>Result sheet</CardTitle>
           <CardDescription>
-            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position.
+            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position. &quot;A&quot; means absent and counts as 0.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -227,7 +232,9 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                       </TableCell>
                       {o.subjects.map((so) => (
                         <TableCell key={so.subject.id} className={cn("text-center tabular-nums", so.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
-                          {so.total.complete ? (
+                          {result.subjects.find((x) => x.id === so.subject.id)!.components.every((c) => st.absent.includes(c.id)) ? (
+                            <span title="Absent (counts as 0)">A</span>
+                          ) : so.total.complete ? (
                             <>
                               {formatNumber(so.total.obtained, places)}
                               {so.passed === false ? <span className="sr-only"> (failed)</span> : null}
@@ -240,20 +247,20 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                         </TableCell>
                       ))}
                       <TableCell className="text-right tabular-nums">
-                        {o.grandObtained ? `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}` : "—"}
+                        {o.grandObtained && !st.absentAll ? `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}` : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{o.percentage ? o.percentage.toFixed(places) : "—"}</TableCell>
-                      <TableCell className="text-center font-medium">{o.grade?.grade ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{o.percentage && !st.absentAll ? o.percentage.toFixed(places) : "—"}</TableCell>
+                      <TableCell className="text-center font-medium">{st.absentAll ? "—" : (o.grade?.grade ?? "—")}</TableCell>
                       <TableCell>
                         <span
                           className={cn(
                             "text-xs font-semibold",
-                            o.status === "Pass" && "text-emerald-700 dark:text-emerald-400",
-                            o.status === "Fail" && "text-red-700 dark:text-red-400",
+                            !st.absentAll && o.status === "Pass" && "text-emerald-700 dark:text-emerald-400",
+                            !st.absentAll && o.status === "Fail" && "text-red-700 dark:text-red-400",
                             o.status === "Incomplete" && "text-amber-700 dark:text-amber-400",
                           )}
                         >
-                          {o.status === "Incomplete" ? `Incomplete (${o.missing} missing)` : o.status}
+                          {st.absentAll ? "Absent" : o.status === "Incomplete" ? `Incomplete (${o.missing} missing)` : o.status}
                         </span>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{st.position ?? "—"}</TableCell>

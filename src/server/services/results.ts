@@ -8,7 +8,8 @@
  *
  * Only marks from submitted/approved sheets are counted — a draft is still the subject teacher's
  * working copy. A student with any missing mark is *Incomplete*: no total, percentage, grade or
- * position, and the class result cannot be approved until every student is complete.
+ * position, and the class result cannot be approved until every student is complete. An absence
+ * ("A") is not missing: it counts as 0, and a student absent for everything gets no position.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { evaluateStudent, competitionRanks, makeGradingRules, type GradingRules, type StudentOutcome, type SubjectSpec } from "@/lib/domain/calculations";
@@ -75,8 +76,12 @@ export interface ResultStudent {
   /** Competition rank by percentage among complete students; `null` while incomplete. */
   position: number | null;
   remarks: string;
-  /** Component marks (assessment id → mark) from submitted sheets. */
+  /** Component marks (assessment id → mark) from submitted sheets; an absence is stored here as "0". */
   marks: Record<string, string>;
+  /** Components the student was absent for (assessment ids). */
+  absent: string[];
+  /** Absent for every component of this result: shown as ABSENT, with no position. */
+  absentAll: boolean;
 }
 
 export interface ResultApprovalView {
@@ -250,18 +255,24 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     stages,
   );
   const marksByStudent = new Map<string, Record<string, string>>();
+  const absentByStudent = new Map<string, string[]>();
   for (const m of markRows) {
-    if (m.value === null) continue;
+    if (m.value === null && !m.isAbsent) continue;
     const record = marksByStudent.get(m.enrollmentId) ?? {};
-    record[m.assessmentId] = m.value;
+    record[m.assessmentId] = m.isAbsent ? "0" : m.value!;
     marksByStudent.set(m.enrollmentId, record);
+    if (m.isAbsent) absentByStudent.set(m.enrollmentId, [...(absentByStudent.get(m.enrollmentId) ?? []), m.assessmentId]);
   }
+  const componentCount = resultSubjects.reduce((n, subject) => n + subject.components.length, 0);
 
   const evaluated = studentRows.map((s) => {
     const studentMarks = marksByStudent.get(s.enrollmentId) ?? {};
-    return { ...s, marks: studentMarks, outcome: evaluateStudent(resultSubjects, studentMarks, rules) };
+    const absent = absentByStudent.get(s.enrollmentId) ?? [];
+    return { ...s, marks: studentMarks, absent, absentAll: componentCount > 0 && absent.length === componentCount, outcome: evaluateStudent(resultSubjects, studentMarks, rules) };
   });
-  const ranks = competitionRanks(Object.fromEntries(evaluated.map((s) => [s.enrollmentId, s.outcome.complete ? s.outcome.percentage : null])));
+  const ranks = competitionRanks(
+    Object.fromEntries(evaluated.map((s) => [s.enrollmentId, s.outcome.complete && !s.absentAll ? s.outcome.percentage : null])),
+  );
   const resultStudents: ResultStudent[] = evaluated.map((s) => ({ ...s, remarks: s.remarks ?? "", position: ranks[s.enrollmentId] ?? null }));
 
   const approvalRows = await ctx.db

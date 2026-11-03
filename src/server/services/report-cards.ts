@@ -1,6 +1,7 @@
 /**
  * Report cards: turn a compiled class result into the data the themed A4 cards print.
- * Nothing is invented: missing marks print as "—", an incomplete student prints as INCOMPLETE, and
+ * Nothing is invented: missing marks print as "—", an absence as "A" (counted as 0), a student absent
+ * throughout as ABSENT, an incomplete student as INCOMPLETE, and
  * every card is marked PROVISIONAL until the result has its final approval. Signature lines are blank.
  */
 import { formatNumber, type GradingRules } from "@/lib/domain/calculations";
@@ -55,11 +56,14 @@ function buildRows(result: ClassResultView, student: ResultStudent, places: numb
     const subject = result.subjects.find((s) => s.id === o.subject.id)!;
     const monthly = subject.components.find((c) => c.code === "MONTHLY");
     const termExam = subject.components.find((c) => c.code === "TERM_EXAM");
-    const mark = (id: string | undefined) => (id ? formatNumber(student.marks[id] ?? null, places) : "—");
-    const pct = o.percentage;
+    const absent = new Set(student.absent);
+    const mark = (id: string | undefined) => (!id ? "—" : absent.has(id) ? "A" : formatNumber(student.marks[id] ?? null, places));
+    const absentThroughout = subject.components.every((c) => absent.has(c.id));
+    // Absent from the whole test: no per-subject percentage or grade either, only "A".
+    const pct = student.absentAll ? null : o.percentage;
     const pctNumber = pct === null ? 0 : Math.min(100, Math.max(0, pct.toNumber()));
-    const pass = show.status && o.passed === true;
-    const fail = show.status && o.passed === false;
+    const pass = show.status && o.passed === true && !student.absentAll;
+    const fail = show.status && o.passed === false && !student.absentAll;
     return {
       n: i + 1,
       name: subject.name,
@@ -69,13 +73,13 @@ function buildRows(result: ClassResultView, student: ResultStudent, places: numb
       mm: monthly ? formatNumber(monthly.max, places) : "—",
       t: mark(termExam?.id),
       tm: termExam ? formatNumber(termExam.max, places) : "—",
-      ob: formatNumber(o.total.obtained, places),
+      ob: absentThroughout ? "A" : formatNumber(o.total.obtained, places),
       max: formatNumber(o.total.maximum, places),
       pct: pct === null ? "—" : pct.toFixed(places),
       pctShort: pct === null ? "—" : String(Math.round(pct.toNumber())),
       bar: pctNumber,
       barH: Math.round(pctNumber * 0.95),
-      grade: show.grades ? (o.grade?.grade ?? "—") : "",
+      grade: show.grades ? (student.absentAll ? "—" : (o.grade?.grade ?? "—")) : "",
       pass,
       fail,
       counts: subject.includeInTotal,
@@ -121,7 +125,9 @@ export async function buildReportCards(
 
   const cards = students.map((student) => {
     const o = student.outcome;
-    const incomplete = o.status === "Incomplete" || o.status === "No result";
+    // Absent for everything: no total, grade, pass/fail or position, just ABSENT.
+    const absent = student.absentAll;
+    const incomplete = !absent && (o.status === "Incomplete" || o.status === "No result");
     const pct = o.percentage;
     const pctNumber = pct === null ? 0 : Math.min(100, Math.max(0, pct.toNumber()));
     const compulsoryFailed = o.subjects.filter((s) => s.subject.isCompulsory && s.passed === false).map((s) => s.subject.name);
@@ -142,22 +148,23 @@ export async function buildReportCards(
       streamLabel: science ? "Science group" : "General group",
       student: { name: student.fullName, roll: String(student.rollNumber), id: student.studentCode, guardian: student.guardianName || "—" },
       rows: buildRows(result, student, places, { grades: settings.showSubjectGrades, status: settings.showSubjectStatus }),
-      total: formatNumber(o.grandObtained, places),
+      total: absent ? "—" : formatNumber(o.grandObtained, places),
       maxTotal: formatNumber(o.grandMaximum, places),
-      pct: pct === null ? "—" : pct.toFixed(places),
-      pctBar: pctNumber,
-      pctDeg: Math.round(pctNumber * 3.6),
-      grade: o.grade?.grade ?? "—",
-      gradeRemark: o.grade?.remark ?? (incomplete ? "Result incomplete" : ""),
-      result: o.status === "Pass" ? "PASS" : o.status === "Fail" ? "FAIL" : "INCOMPLETE",
+      pct: pct === null || absent ? "—" : pct.toFixed(places),
+      pctBar: absent ? 0 : pctNumber,
+      pctDeg: absent ? 0 : Math.round(pctNumber * 3.6),
+      grade: absent ? "—" : (o.grade?.grade ?? "—"),
+      gradeRemark: absent ? "Absent" : (o.grade?.remark ?? (incomplete ? "Result incomplete" : "")),
+      result: absent ? "ABSENT" : o.status === "Pass" ? "PASS" : o.status === "Fail" ? "FAIL" : "INCOMPLETE",
       // Ranked against the whole class (ties share a place: 1st, 2nd, 2nd, 4th); none while incomplete.
       position: student.position === null ? "" : `${ordinal(student.position)} of ${result.students.length}`,
       showPosition: settings.showClassPosition && student.position !== null,
-      resultNote: o.status === "Pass" ? "Well done!" : o.status === "Fail" ? "Needs improvement" : "Some marks are missing",
-      passed: o.status === "Pass",
-      failed: o.status === "Fail",
+      resultNote: absent ? "Absent from this test" : o.status === "Pass" ? "Well done!" : o.status === "Fail" ? "Needs improvement" : "Some marks are missing",
+      passed: !absent && o.status === "Pass",
+      failed: !absent && o.status === "Fail",
       incomplete,
-      failedList: compulsoryFailed.join(", "),
+      absent,
+      failedList: absent ? "" : compulsoryFailed.join(", "),
       remarks: student.remarks,
       legend: gradeLegend(result.rules),
       passRule: rules.long,

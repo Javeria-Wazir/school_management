@@ -221,7 +221,8 @@ Every subject therefore has two mark sheets per term — *Monthly Test* and *Ter
 entered, submitted and approved on its own, and each result has its own approval and remarks.
 
 1. **Marks entry** (subject teacher): open a subject's *Monthly Test* or *Term examination*, type the marks (Enter moves down) and
-   *Save draft* as often as needed. A blank box is *missing*; 0 is a real mark. *Submit to class teacher* is
+   *Save draft* as often as needed. A blank box is *missing*; 0 is a real mark; **A** means absent: it counts as 0, prints as "A", and a
+   student absent for the whole test prints as ABSENT with no position. *Submit to class teacher* is
    refused while any mark is missing. The principal can open any sheet and enter marks on a teacher's behalf;
    the audit log records who did it.
 2. **Review** (class teacher): under *Marks entry → My class's subjects*, open a submitted subject and

@@ -463,7 +463,7 @@ export function Theme07({ v }: { v: CardView }) {
                 </div>
               </>
             ) : null}
-            {v.incomplete ? (
+            {v.incomplete || v.absent ? (
               <div
                 style={{
                   borderRadius: "12px",
@@ -477,7 +477,7 @@ export function Theme07({ v }: { v: CardView }) {
                 }}
               >
                 <span style={{ fontSize: "12.5px", fontWeight: "700" }}>Result</span>
-                <span style={{ fontFamily: "var(--rc-font-poppins), sans-serif", fontSize: "20px", fontWeight: "700" }}>INCOMPLETE</span>
+                <span style={{ fontFamily: "var(--rc-font-poppins), sans-serif", fontSize: "20px", fontWeight: "700" }}>{v.result}</span>
               </div>
             ) : null}
           </div>

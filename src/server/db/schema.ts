@@ -398,7 +398,10 @@ export const markSheets = pgTable(
   ],
 );
 
-/** `marks_obtained` NULL = not entered (missing). 0 is a real score. */
+/**
+ * `marks_obtained` NULL = not entered (missing), unless `is_absent`: the student was absent, which
+ * counts as 0 in the result but is shown as "A". 0 is a real score.
+ */
 export const marks = pgTable(
   "marks",
   {
@@ -407,6 +410,7 @@ export const marks = pgTable(
     assessmentId: uuid("assessment_id").notNull().references(() => assessments.id, { onDelete: "restrict" }),
     enrollmentId: uuid("enrollment_id").notNull().references(() => enrollments.id, { onDelete: "restrict" }),
     marksObtained: numeric("marks_obtained", { precision: 6, scale: 2 }),
+    isAbsent: boolean("is_absent").notNull().default(false),
     enteredBy: uuid("entered_by").references(() => users.id),
     changeReason: text("change_reason"),
     createdAt: createdAt(),
@@ -417,6 +421,7 @@ export const marks = pgTable(
     index("marks_sheet_idx").on(t.markSheetId),
     index("marks_enrollment_idx").on(t.enrollmentId),
     check("marks_non_negative", sql`marks_obtained is null or marks_obtained >= 0`),
+    check("marks_absent_has_no_mark", sql`not (is_absent and marks_obtained is not null)`),
     check("marks_change_reason_length", sql`change_reason is null or length(change_reason) <= 300`),
   ],
 );

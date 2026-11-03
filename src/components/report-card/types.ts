@@ -8,7 +8,7 @@ export interface CardRow {
   name: string;
   code: string;
   icon: string;
-  /** Monthly / term marks and their maximums ("—" when not entered or not part of the subject). */
+  /** Monthly / term marks and their maximums ("—" when not entered or not part of the subject, "A" when absent). */
   m: string;
   mm: string;
   t: string;
@@ -67,6 +67,8 @@ export interface CardView {
   passed: boolean;
   failed: boolean;
   incomplete: boolean;
+  /** Absent for every component: result reads ABSENT. */
+  absent: boolean;
   failedList: string;
   remarks: string;
   legend: string;

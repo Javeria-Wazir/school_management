@@ -7,7 +7,7 @@ const stageSchema = z.enum(["monthly", "term"], { message: "Unknown result stage
 
 export const sheetKeySchema = z.object({ examTermId: idSchema, sectionId: idSchema, classSubjectId: idSchema, stage: stageSchema });
 
-/** One cell of the marks grid. A blank value means "not entered" (missing); "0" is a real score. */
+/** One cell of the marks grid. Blank = not entered (missing); "A" = absent (counts as 0); "0" is a real score. */
 const markCellSchema = z.object({
   enrollmentId: idSchema,
   assessmentId: idSchema,
@@ -38,3 +38,7 @@ export const remarksSchema = z.object({
 
 /** Plain decimal with up to 2 places, e.g. "0", "18", "22.5". */
 export const MARK_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
+
+/** What a teacher types for a student who was absent (either case). */
+export const ABSENT = "A";
+export const isAbsentInput = (value: string) => value.trim().toUpperCase() === ABSENT;
