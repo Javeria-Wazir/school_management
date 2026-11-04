@@ -9,7 +9,8 @@ export const sheetKeySchema = z.object({ examTermId: idSchema, sectionId: idSche
 
 /**
  * One cell of the marks grid. Blank = not entered (missing); "A" = absent (counts as 0); "N" = new
- * admission (joined after this test: left out of the student's result); "0" is a real score.
+ * admission (joined after this test: left out of the student's result); "X" = does not take this subject
+ * (left out of the student's result and card); "0" is a real score.
  */
 const markCellSchema = z.object({
   enrollmentId: idSchema,
@@ -49,3 +50,7 @@ export const isAbsentInput = (value: string) => value.trim().toUpperCase() === A
 /** What a teacher types for a student who joined the class after this test (either case). */
 export const NEW_ADMISSION = "N";
 export const isNewAdmissionInput = (value: string) => value.trim().toUpperCase() === NEW_ADMISSION;
+
+/** What a teacher types for a student who does not study this subject, e.g. Computer in the science group (either case). */
+export const NOT_TAKEN = "X";
+export const isNotTakenInput = (value: string) => value.trim().toUpperCase() === NOT_TAKEN;

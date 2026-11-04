@@ -35,6 +35,7 @@ source is kept in `Desktop\final_result_python_prototype_backup.zip`.
 | `0002_monthly_stage.sql`, `0003_monthly_stage_rules.sql` | Monthly Test published before the term result. |
 | `0004_marks_absent.sql` | "A" for absent in marks. |
 | `0005_marks_new_admission.sql` | "N" for a new admission who joined after a test. |
+| `0006_marks_not_taken.sql` | "X" for a subject a student does not take. |
 | `meta/*.json` | Drizzle's record of the schema after each migration (needed by `db:generate`). |
 
 ## Command-line scripts (`web/scripts/`)
@@ -67,7 +68,7 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 | `/admin/assignments` | Which teacher teaches which subject in which section. |
 | `/admin/exam-terms` | Terms, Monthly 25 / Term 75 components, maximum marks. |
 | `/admin/grading` | Grading scales and pass marks. |
-| `/marks` and `/marks/[term]/[section]/[subject]` | Marks entry grid: draft, submit, absent (A), new admission (N). |
+| `/marks` and `/marks/[term]/[section]/[subject]` | Marks entry grid: draft, submit, absent (A), new admission (N), subject not taken (X). |
 | `/results` and `/results/[term]/[section]` | Class result: review, approve, return, remarks, reopen. |
 | `/print/results/[term]/[section]` | Printable A4 result cards (`print/layout.tsx` loads the card fonts, `print.css` the page setup). |
 | `/forbidden`, `not-found.tsx`, `(app)/error.tsx`, `(app)/loading.tsx` | No-access, missing-page, error and loading screens. |
@@ -134,7 +135,7 @@ icons, chosen by subject code; `subj-generic.svg` for any other subject).
 |---|---|
 | `unit/calculations.test.ts` | Result arithmetic and grading. |
 | `unit/auth-and-validation.test.ts` | Passwords, sessions, form validation. |
-| `db/*.test.ts` | Features run against a real PostgreSQL (PGlite) with the real migrations: schema rules, auth, staff and settings, academics, student import, marks and results, absent marks, new admissions. |
+| `db/*.test.ts` | Features run against a real PostgreSQL (PGlite) with the real migrations: schema rules, auth, staff and settings, academics, student import, marks and results, absent marks, new admissions, subjects not taken. |
 | `db/helpers.ts` | Creates the test database and test users. |
 | `stubs/server-only.ts` | Lets server code load inside tests. |
 

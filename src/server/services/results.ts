@@ -12,6 +12,7 @@
  * ("A") is not missing: it counts as 0, and a student absent for everything gets no position.
  * A new admission ("N", joined after that test) is not missing either: the component is left out of
  * that student's result (marks and maximum), and a student who is new for everything gets no result.
+ * A subject the student does not take ("X", e.g. Computer in the science group) is left out the same way.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { evaluateStudent, competitionRanks, makeGradingRules, type GradingRules, type StudentOutcome, type SubjectSpec } from "@/lib/domain/calculations";
@@ -88,6 +89,8 @@ export interface ResultStudent {
   newAdmission: string[];
   /** Joined after every component of this result: shown as NEW ADMISSION, with no result or position. */
   newAdmissionAll: boolean;
+  /** Components of subjects the student does not take (assessment ids): left out of their result and card. */
+  notTaken: string[];
 }
 
 export interface ResultApprovalView {
@@ -263,9 +266,14 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
   const marksByStudent = new Map<string, Record<string, string>>();
   const absentByStudent = new Map<string, string[]>();
   const newByStudent = new Map<string, string[]>();
+  const notTakenByStudent = new Map<string, string[]>();
   for (const m of markRows) {
     if (m.isNewAdmission) {
       newByStudent.set(m.enrollmentId, [...(newByStudent.get(m.enrollmentId) ?? []), m.assessmentId]);
+      continue;
+    }
+    if (m.isNotTaken) {
+      notTakenByStudent.set(m.enrollmentId, [...(notTakenByStudent.get(m.enrollmentId) ?? []), m.assessmentId]);
       continue;
     }
     if (m.value === null && !m.isAbsent) continue;
@@ -280,19 +288,22 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     const studentMarks = marksByStudent.get(s.enrollmentId) ?? {};
     const absent = absentByStudent.get(s.enrollmentId) ?? [];
     const newAdmission = newByStudent.get(s.enrollmentId) ?? [];
-    // A new admission is judged only on what they sat: those components (and subjects left empty) drop out.
-    const skip = new Set(newAdmission);
+    const notTaken = notTakenByStudent.get(s.enrollmentId) ?? [];
+    // A student is judged only on what they sat: tests held before a new admission joined and subjects
+    // they do not take drop out (with any subject left empty).
+    const skip = new Set([...newAdmission, ...notTaken]);
     const ownSubjects = skip.size
       ? resultSubjects.map((subject) => ({ ...subject, components: subject.components.filter((c) => !skip.has(c.id)) })).filter((subject) => subject.components.length > 0)
       : resultSubjects;
-    const sat = componentCount - newAdmission.length;
+    const sat = componentCount - notTaken.length - newAdmission.length;
     return {
       ...s,
       marks: studentMarks,
       absent,
       absentAll: absent.length > 0 && absent.length === sat,
       newAdmission,
-      newAdmissionAll: componentCount > 0 && sat === 0,
+      newAdmissionAll: newAdmission.length > 0 && sat === 0,
+      notTaken,
       outcome: evaluateStudent(ownSubjects, studentMarks, rules),
     };
   });

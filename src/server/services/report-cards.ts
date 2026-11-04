@@ -2,7 +2,8 @@
  * Report cards: turn a compiled class result into the data the themed A4 cards print.
  * Nothing is invented: missing marks print as "—", an absence as "A" (counted as 0), a student absent
  * throughout as ABSENT, a test taken before a new admission joined as "—" (left out of their totals), a
- * student who joined after every test as NEW ADMISSION, an incomplete student as INCOMPLETE, and
+ * student who joined after every test as NEW ADMISSION, a subject the student does not take is left off
+ * their card, an incomplete student as INCOMPLETE, and
  * every card is marked PROVISIONAL until the result has its final approval. Signature lines are blank.
  */
 import { formatNumber, type GradingRules } from "@/lib/domain/calculations";
@@ -54,9 +55,12 @@ function passRules(rules: GradingRules): { long: string; short: string } {
 
 function buildRows(result: ClassResultView, student: ResultStudent, places: number, show: { grades: boolean; status: boolean }): CardRow[] {
   const absent = new Set(student.absent);
-  // Tests held before a new admission joined: shown as "—" and left out of their totals.
-  const notJoined = new Set(student.newAdmission);
-  return result.subjects.map((subject, i) => {
+  // Tests held before a new admission joined, or of a subject not taken: shown as "—" and left out of their totals.
+  const notJoined = new Set([...student.newAdmission, ...student.notTaken]);
+  const notTaken = new Set(student.notTaken);
+  // A subject the student does not take at all is not printed on their card.
+  const taken = result.subjects.filter((subject) => !subject.components.every((c) => notTaken.has(c.id)));
+  return taken.map((subject, i) => {
     // No outcome when the student joined after every test of this subject.
     const o = student.outcome.subjects.find((x) => x.subject.id === subject.id);
     const monthly = subject.components.find((c) => c.code === "MONTHLY");

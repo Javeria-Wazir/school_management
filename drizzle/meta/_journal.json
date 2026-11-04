@@ -43,6 +43,13 @@
       "when": 1793792107494,
       "tag": "0005_marks_new_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793804174309,
+      "tag": "0006_marks_not_taken",
+      "breakpoints": true
     }
   ]
 }

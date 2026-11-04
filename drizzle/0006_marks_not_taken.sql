@@ -1,0 +1,2 @@
+ALTER TABLE "marks" ADD COLUMN "is_not_taken" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "marks" ADD CONSTRAINT "marks_not_taken_has_no_mark" CHECK (not (is_not_taken and (marks_obtained is not null or is_absent or is_new_admission)));

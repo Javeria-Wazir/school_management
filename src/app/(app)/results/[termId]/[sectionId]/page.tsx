@@ -203,7 +203,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <CardHeader>
           <CardTitle>Result sheet</CardTitle>
           <CardDescription>
-            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position. &quot;A&quot; means absent and counts as 0. &quot;N&quot; means a new admission who joined after that test; it is left out of their total.
+            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position. &quot;A&quot; means absent and counts as 0. &quot;N&quot; means a new admission who joined after that test; it is left out of their total. &quot;X&quot; means the student does not take that subject; it is left out of their total and card.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -240,12 +240,14 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                         <span className="block text-xs text-muted-foreground">{st.studentCode}</span>
                       </TableCell>
                       {result.subjects.map((subject) => {
-                        // No outcome when the student joined after every test of this subject.
+                        // No outcome when the student does not take this subject or joined after every test of it.
                         const so = o.subjects.find((x) => x.subject.id === subject.id);
-                        const sat = subject.components.filter((c) => !st.newAdmission.includes(c.id));
+                        const sat = subject.components.filter((c) => !st.newAdmission.includes(c.id) && !st.notTaken.includes(c.id));
                         return (
                         <TableCell key={subject.id} className={cn("text-center tabular-nums", so?.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
-                          {!so ? (
+                          {!so && subject.components.every((c) => st.notTaken.includes(c.id)) ? (
+                            <span className="text-muted-foreground" title="Does not take this subject">X</span>
+                          ) : !so ? (
                             <span className="text-muted-foreground" title="New admission (joined after this test)">N</span>
                           ) : sat.every((c) => st.absent.includes(c.id)) ? (
                             <span title="Absent (counts as 0)">A</span>
