@@ -42,9 +42,10 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const { approval, readiness, access } = result;
-  const counts = { pass: 0, fail: 0, incomplete: 0, absent: 0 };
+  const counts = { pass: 0, fail: 0, incomplete: 0, absent: 0, newAdmission: 0 };
   for (const s of result.students) {
-    if (s.absentAll) counts.absent += 1;
+    if (s.newAdmissionAll) counts.newAdmission += 1;
+    else if (s.absentAll) counts.absent += 1;
     else if (s.outcome.status === "Pass") counts.pass += 1;
     else if (s.outcome.status === "Fail") counts.fail += 1;
     else counts.incomplete += 1;
@@ -148,7 +149,15 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <StatCard
           label="Failed"
           value={counts.fail}
-          hint={[counts.incomplete ? `${counts.incomplete} incomplete` : "", counts.absent ? `${counts.absent} absent` : ""].filter(Boolean).join(" · ") || undefined}
+          hint={
+            [
+              counts.incomplete ? `${counts.incomplete} incomplete` : "",
+              counts.absent ? `${counts.absent} absent` : "",
+              counts.newAdmission ? `${counts.newAdmission} new admission${counts.newAdmission === 1 ? "" : "s"}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined
+          }
         />
       </div>
 
@@ -194,7 +203,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <CardHeader>
           <CardTitle>Result sheet</CardTitle>
           <CardDescription>
-            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position. &quot;A&quot; means absent and counts as 0.
+            Marks obtained per subject. &quot;—&quot; means not entered or not submitted yet; a student with any missing mark has no total, grade or position. &quot;A&quot; means absent and counts as 0. &quot;N&quot; means a new admission who joined after that test; it is left out of their total.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,9 +239,15 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                         <span className="font-medium">{st.fullName}</span>
                         <span className="block text-xs text-muted-foreground">{st.studentCode}</span>
                       </TableCell>
-                      {o.subjects.map((so) => (
-                        <TableCell key={so.subject.id} className={cn("text-center tabular-nums", so.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
-                          {result.subjects.find((x) => x.id === so.subject.id)!.components.every((c) => st.absent.includes(c.id)) ? (
+                      {result.subjects.map((subject) => {
+                        // No outcome when the student joined after every test of this subject.
+                        const so = o.subjects.find((x) => x.subject.id === subject.id);
+                        const sat = subject.components.filter((c) => !st.newAdmission.includes(c.id));
+                        return (
+                        <TableCell key={subject.id} className={cn("text-center tabular-nums", so?.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
+                          {!so ? (
+                            <span className="text-muted-foreground" title="New admission (joined after this test)">N</span>
+                          ) : sat.every((c) => st.absent.includes(c.id)) ? (
                             <span title="Absent (counts as 0)">A</span>
                           ) : so.total.complete ? (
                             <>
@@ -245,7 +260,8 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                             </span>
                           )}
                         </TableCell>
-                      ))}
+                        );
+                      })}
                       <TableCell className="text-right tabular-nums">
                         {o.grandObtained && !st.absentAll ? `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}` : "—"}
                       </TableCell>
@@ -260,7 +276,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                             o.status === "Incomplete" && "text-amber-700 dark:text-amber-400",
                           )}
                         >
-                          {st.absentAll ? "Absent" : o.status === "Incomplete" ? `Incomplete (${o.missing} missing)` : o.status}
+                          {st.newAdmissionAll ? "New admission" : st.absentAll ? "Absent" : o.status === "Incomplete" ? `Incomplete (${o.missing} missing)` : o.status}
                         </span>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{st.position ?? "—"}</TableCell>

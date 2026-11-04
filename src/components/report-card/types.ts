@@ -8,7 +8,7 @@ export interface CardRow {
   name: string;
   code: string;
   icon: string;
-  /** Monthly / term marks and their maximums ("—" when not entered or not part of the subject, "A" when absent). */
+  /** Monthly / term marks and their maximums ("—" when not entered, not part of the subject or before a new admission joined; "A" when absent). */
   m: string;
   mm: string;
   t: string;
@@ -58,7 +58,7 @@ export interface CardView {
   pctDeg: number;
   grade: string;
   gradeRemark: string;
-  /** "PASS", "FAIL" or "INCOMPLETE". */
+  /** "PASS", "FAIL", "INCOMPLETE", "ABSENT" or "NEW ADMISSION". */
   result: string;
   /** Class position, e.g. "3rd of 21"; shown only when School settings ask for it and the result is complete. */
   position: string;
@@ -69,6 +69,8 @@ export interface CardView {
   incomplete: boolean;
   /** Absent for every component: result reads ABSENT. */
   absent: boolean;
+  /** Joined after every component: result reads NEW ADMISSION. */
+  newAdmission: boolean;
   failedList: string;
   remarks: string;
   legend: string;

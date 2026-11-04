@@ -10,6 +10,8 @@
  * working copy. A student with any missing mark is *Incomplete*: no total, percentage, grade or
  * position, and the class result cannot be approved until every student is complete. An absence
  * ("A") is not missing: it counts as 0, and a student absent for everything gets no position.
+ * A new admission ("N", joined after that test) is not missing either: the component is left out of
+ * that student's result (marks and maximum), and a student who is new for everything gets no result.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { evaluateStudent, competitionRanks, makeGradingRules, type GradingRules, type StudentOutcome, type SubjectSpec } from "@/lib/domain/calculations";
@@ -73,15 +75,19 @@ export interface ResultStudent {
   fullName: string;
   guardianName: string | null;
   outcome: StudentOutcome;
-  /** Competition rank by percentage among complete students; `null` while incomplete. */
+  /** Competition rank by percentage among complete students; `null` while incomplete, absent or new for everything. */
   position: number | null;
   remarks: string;
   /** Component marks (assessment id → mark) from submitted sheets; an absence is stored here as "0". */
   marks: Record<string, string>;
   /** Components the student was absent for (assessment ids). */
   absent: string[];
-  /** Absent for every component of this result: shown as ABSENT, with no position. */
+  /** Absent for every component of this result that the student sat: shown as ABSENT, with no position. */
   absentAll: boolean;
+  /** Components the student joined too late for (assessment ids): left out of their result. */
+  newAdmission: string[];
+  /** Joined after every component of this result: shown as NEW ADMISSION, with no result or position. */
+  newAdmissionAll: boolean;
 }
 
 export interface ResultApprovalView {
@@ -256,7 +262,12 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
   );
   const marksByStudent = new Map<string, Record<string, string>>();
   const absentByStudent = new Map<string, string[]>();
+  const newByStudent = new Map<string, string[]>();
   for (const m of markRows) {
+    if (m.isNewAdmission) {
+      newByStudent.set(m.enrollmentId, [...(newByStudent.get(m.enrollmentId) ?? []), m.assessmentId]);
+      continue;
+    }
     if (m.value === null && !m.isAbsent) continue;
     const record = marksByStudent.get(m.enrollmentId) ?? {};
     record[m.assessmentId] = m.isAbsent ? "0" : m.value!;
@@ -268,7 +279,22 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
   const evaluated = studentRows.map((s) => {
     const studentMarks = marksByStudent.get(s.enrollmentId) ?? {};
     const absent = absentByStudent.get(s.enrollmentId) ?? [];
-    return { ...s, marks: studentMarks, absent, absentAll: componentCount > 0 && absent.length === componentCount, outcome: evaluateStudent(resultSubjects, studentMarks, rules) };
+    const newAdmission = newByStudent.get(s.enrollmentId) ?? [];
+    // A new admission is judged only on what they sat: those components (and subjects left empty) drop out.
+    const skip = new Set(newAdmission);
+    const ownSubjects = skip.size
+      ? resultSubjects.map((subject) => ({ ...subject, components: subject.components.filter((c) => !skip.has(c.id)) })).filter((subject) => subject.components.length > 0)
+      : resultSubjects;
+    const sat = componentCount - newAdmission.length;
+    return {
+      ...s,
+      marks: studentMarks,
+      absent,
+      absentAll: absent.length > 0 && absent.length === sat,
+      newAdmission,
+      newAdmissionAll: componentCount > 0 && sat === 0,
+      outcome: evaluateStudent(ownSubjects, studentMarks, rules),
+    };
   });
   const ranks = competitionRanks(
     Object.fromEntries(evaluated.map((s) => [s.enrollmentId, s.outcome.complete && !s.absentAll ? s.outcome.percentage : null])),

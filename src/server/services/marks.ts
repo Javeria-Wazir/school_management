@@ -3,7 +3,8 @@
  *
  * A mark sheet is one exam term × section × class subject. Marks are stored per student × component
  * (Monthly, Term …). A component without a mark is *missing*, never zero; "0" is a real score and
- * "A" (absent) counts as 0 but is shown as A. Only missing marks block submission.
+ * "A" (absent) counts as 0 but is shown as A; "N" (new admission: the student joined after this test)
+ * leaves the component out of that student's result. Only missing marks block submission.
  * Workflow: draft → submitted → approved, or returned (with a reason) back to the teacher.
  * Each subject has two sheets per term: the Monthly Test (`monthly`) and the other components (`term`),
  * so monthly results can be published before the term examination.
@@ -13,7 +14,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Dec } from "@/lib/domain/calculations";
 import { idSchema } from "@/lib/validation/common";
-import { ABSENT, isAbsentInput, MARK_PATTERN, returnSheetSchema, saveMarksSchema, sheetKeySchema } from "@/lib/validation/results";
+import { ABSENT, isAbsentInput, isNewAdmissionInput, MARK_PATTERN, NEW_ADMISSION, returnSheetSchema, saveMarksSchema, sheetKeySchema } from "@/lib/validation/results";
 import type { SessionUser } from "@/server/auth/session";
 import type { Db, Tx } from "@/server/db/client";
 import { withActor } from "@/server/db/actor";
@@ -161,7 +162,7 @@ async function countMissing(db: Db | Tx, sheetId: string | null, key: SheetKey) 
       .select({ n: sql<number>`count(*)::int` })
       .from(marks)
       .innerJoin(enrollments, eq(enrollments.id, marks.enrollmentId))
-      .where(and(eq(marks.markSheetId, sheetId), eq(enrollments.status, "active"), sql`(${marks.marksObtained} is not null or ${marks.isAbsent})`));
+      .where(and(eq(marks.markSheetId, sheetId), eq(enrollments.status, "active"), sql`(${marks.marksObtained} is not null or ${marks.isAbsent} or ${marks.isNewAdmission})`));
     entered = row.n;
   }
   const expected = studentRows.length * componentRows.length;
@@ -250,7 +251,7 @@ export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: u
       returnReason: markSheets.returnReason,
       // Qualified by hand: Drizzle leaves columns unqualified in a single-table select.
       entered: sql<number>`(select count(*)::int from marks m join enrollments e on e.id = m.enrollment_id
-        where m.mark_sheet_id = "mark_sheets"."id" and e.status = 'active' and (m.marks_obtained is not null or m.is_absent))`,
+        where m.mark_sheet_id = "mark_sheets"."id" and e.status = 'active' and (m.marks_obtained is not null or m.is_absent or m.is_new_admission))`,
     })
     .from(markSheets)
     .where(and(eq(markSheets.examTermId, examTermId), inArray(markSheets.sectionId, [...new Set(rows.map((r) => r.sectionId))])));
@@ -293,7 +294,7 @@ export interface MarkSheetView {
   decimalPlaces: number;
   components: { assessmentId: string; code: string; name: string; maxMarks: string }[];
   students: { enrollmentId: string; rollNumber: number; studentCode: string; fullName: string }[];
-  /** `cellKey` → mark as text, or "A" for absent; a key that is not there = not entered. */
+  /** `cellKey` → mark as text, "A" for absent or "N" for a new admission; a key that is not there = not entered. */
   marks: Record<string, string>;
   expected: number;
   missing: number;
@@ -324,7 +325,7 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
   const components = allComponents.filter((a) => stageOfCode(a.code) === key.stage);
   const markRows = c.sheet
     ? await ctx.db
-        .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent })
+        .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent, isNewAdmission: marks.isNewAdmission })
         .from(marks)
         .where(eq(marks.markSheetId, c.sheet.id))
     : [];
@@ -333,6 +334,7 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
   for (const m of markRows) {
     if (!active.has(m.enrollmentId)) continue;
     if (m.isAbsent) values[cellKey(m.enrollmentId, m.assessmentId)] = ABSENT;
+    else if (m.isNewAdmission) values[cellKey(m.enrollmentId, m.assessmentId)] = NEW_ADMISSION;
     else if (m.value !== null) values[cellKey(m.enrollmentId, m.assessmentId)] = new Dec(m.value).toString();
   }
   const expected = studentRows.length * components.length;
@@ -398,7 +400,7 @@ async function ensureSheet(tx: Tx, key: SheetKey): Promise<typeof markSheets.$in
 }
 
 /**
- * Save the changed cells of a draft/returned sheet. Blank = not entered, "A" = absent. Every value is checked
+ * Save the changed cells of a draft/returned sheet. Blank = not entered, "A" = absent, "N" = new admission. Every value is checked
  * against its component's maximum and the school's decimal setting; all errors come back per cell.
  */
 export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ saved: number; missing: number }> {
@@ -417,7 +419,7 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
     const active = new Set(studentRows.map((s) => s.enrollmentId));
 
     const errors: FieldErrors = {};
-    // value: a mark, "A" (absent) or null (not entered)
+    // value: a mark, "A" (absent), "N" (new admission) or null (not entered)
     const parsed = new Map<string, { enrollmentId: string; assessmentId: string; value: string | null }>();
     for (const cell of data.marks) {
       const k = cellKey(cell.enrollmentId, cell.assessmentId);
@@ -431,8 +433,12 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
         parsed.set(k, { ...cell, value: ABSENT });
         continue;
       }
+      if (isNewAdmissionInput(cell.value)) {
+        parsed.set(k, { ...cell, value: NEW_ADMISSION });
+        continue;
+      }
       if (!MARK_PATTERN.test(cell.value)) {
-        errors[k] = ["Enter a number such as 18 or 0, or A if absent (leave blank if not taken yet)"];
+        errors[k] = ["Enter a number such as 18 or 0, A if absent or N for a new admission (leave blank if not taken yet)"];
         continue;
       }
       const value = new Dec(cell.value);
@@ -446,11 +452,14 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
 
     const sheet = await ensureSheet(tx, key);
     const existing = await tx
-      .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent })
+      .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent, isNewAdmission: marks.isNewAdmission })
       .from(marks)
       .where(eq(marks.markSheetId, sheet.id));
     const current = new Map(
-      existing.map((m) => [cellKey(m.enrollmentId, m.assessmentId), m.isAbsent ? ABSENT : m.value === null ? null : new Dec(m.value).toString()]),
+      existing.map((m) => [
+        cellKey(m.enrollmentId, m.assessmentId),
+        m.isAbsent ? ABSENT : m.isNewAdmission ? NEW_ADMISSION : m.value === null ? null : new Dec(m.value).toString(),
+      ]),
     );
     const changes = [...parsed.entries()]
       .filter(([k, cell]) => (current.has(k) ? current.get(k) !== cell.value : cell.value !== null))
@@ -458,8 +467,9 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
         markSheetId: sheet.id,
         enrollmentId: cell.enrollmentId,
         assessmentId: cell.assessmentId,
-        marksObtained: cell.value === ABSENT ? null : cell.value,
+        marksObtained: cell.value === ABSENT || cell.value === NEW_ADMISSION ? null : cell.value,
         isAbsent: cell.value === ABSENT,
+        isNewAdmission: cell.value === NEW_ADMISSION,
       }));
     if (changes.length) {
       await tx
@@ -467,7 +477,7 @@ export async function saveMarks(ctx: ServiceContext, input: unknown): Promise<{ 
         .values(changes)
         .onConflictDoUpdate({
           target: [marks.assessmentId, marks.enrollmentId],
-          set: { marksObtained: sql`excluded.marks_obtained`, isAbsent: sql`excluded.is_absent` },
+          set: { marksObtained: sql`excluded.marks_obtained`, isAbsent: sql`excluded.is_absent`, isNewAdmission: sql`excluded.is_new_admission` },
         });
     }
     const { missing } = await countMissing(tx, sheet.id, key);
@@ -488,7 +498,7 @@ export async function submitMarkSheet(ctx: ServiceContext, input: unknown): Prom
     if (count.missing > 0) {
       throw new AppError(
         "RULE",
-        `${count.missing} mark${count.missing === 1 ? " is" : "s are"} still missing. Enter every mark before submitting (type A for an absent student; a blank box means not entered).`,
+        `${count.missing} mark${count.missing === 1 ? " is" : "s are"} still missing. Enter every mark before submitting (type A for an absent student, N for a new admission; a blank box means not entered).`,
       );
     }
     await tx
@@ -556,7 +566,7 @@ export async function sheetStatusesForSection(db: Db, examTermId: string, sectio
 export async function submittedMarksForSection(db: Db, examTermId: string, sectionId: string, enrollmentIds: string[], stages: ResultStage[]) {
   if (enrollmentIds.length === 0) return [];
   return db
-    .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent })
+    .select({ enrollmentId: marks.enrollmentId, assessmentId: marks.assessmentId, value: marks.marksObtained, isAbsent: marks.isAbsent, isNewAdmission: marks.isNewAdmission })
     .from(marks)
     .innerJoin(markSheets, eq(markSheets.id, marks.markSheetId))
     .where(

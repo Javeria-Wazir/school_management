@@ -7,8 +7,8 @@ A4 report cards, Excel/CSV import/export and an audit trail.
 **Stack:** Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 + shadcn/ui · Drizzle ORM + SQL
 migrations · Neon serverless PostgreSQL · Vercel.
 
-> The Python/Streamlit project in the parent folder is an earlier prototype of the same requirements. This
-> application reuses its domain rules, not its code, and does not depend on it.
+> An earlier Python/Streamlit prototype of the same requirements was retired on 2026-11-04. This
+> application reused its domain rules, not its code, and does not depend on it.
 
 - Architecture, schema, auth and deployment plan: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Build status by module: [§ 9](#9-modules-and-status)
@@ -222,7 +222,9 @@ entered, submitted and approved on its own, and each result has its own approval
 
 1. **Marks entry** (subject teacher): open a subject's *Monthly Test* or *Term examination*, type the marks (Enter moves down) and
    *Save draft* as often as needed. A blank box is *missing*; 0 is a real mark; **A** means absent: it counts as 0, prints as "A", and a
-   student absent for the whole test prints as ABSENT with no position. *Submit to class teacher* is
+   student absent for the whole test prints as ABSENT with no position. **N** means a new admission who joined after
+   that test: it is left out of the student's total (marks and maximum), prints as "—", and a student who joined after
+   every test of the result prints as NEW ADMISSION with no total or position. *Submit to class teacher* is
    refused while any mark is missing. The principal can open any sheet and enter marks on a teacher's behalf;
    the audit log records who did it.
 2. **Review** (class teacher): under *Marks entry → My class's subjects*, open a submitted subject and

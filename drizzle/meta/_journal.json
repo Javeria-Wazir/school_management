@@ -36,6 +36,13 @@
       "when": 1793719968869,
       "tag": "0004_marks_absent",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793792107494,
+      "tag": "0005_marks_new_admission",
+      "breakpoints": true
     }
   ]
 }

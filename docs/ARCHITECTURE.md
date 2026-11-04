@@ -3,7 +3,7 @@
 Next.js (App Router, TypeScript) · Tailwind CSS + shadcn/ui · Drizzle ORM · Neon PostgreSQL · Vercel
 
 This is a new application. It reuses the **domain rules** of the earlier Python/Streamlit
-prototype in the parent folder (workflow states, grading maths, locks, audit design), not its code.
+prototype, since retired (workflow states, grading maths, locks, audit design), not its code.
 
 ## 1. Overview
 

@@ -463,7 +463,7 @@ export function Theme07({ v }: { v: CardView }) {
                 </div>
               </>
             ) : null}
-            {v.incomplete || v.absent ? (
+            {v.incomplete || v.absent || v.newAdmission ? (
               <div
                 style={{
                   borderRadius: "12px",

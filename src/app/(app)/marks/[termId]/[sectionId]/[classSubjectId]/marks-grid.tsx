@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Dec } from "@/lib/domain/calculations";
-import { ABSENT, isAbsentInput, MARK_PATTERN } from "@/lib/validation/results";
+import { ABSENT, isAbsentInput, isNewAdmissionInput, MARK_PATTERN, NEW_ADMISSION } from "@/lib/validation/results";
 import { cn } from "@/lib/utils";
 import type { MarkSheetView } from "@/server/services/marks";
 import { approveSheetAction, returnSheetAction, saveMarksAction, submitMarksAction } from "./actions";
@@ -23,8 +23,8 @@ const key = (enrollmentId: string, assessmentId: string) => `${enrollmentId}:${a
 
 /** Same checks as the server, so mistakes show while typing. Returns an error message or null. */
 function checkValue(value: string, max: string, allowDecimals: boolean, places: number): string | null {
-  if (value === "" || isAbsentInput(value)) return null;
-  if (!MARK_PATTERN.test(value)) return "Enter a number, or A if absent";
+  if (value === "" || isAbsentInput(value) || isNewAdmissionInput(value)) return null;
+  if (!MARK_PATTERN.test(value)) return "Enter a number, A if absent or N for a new admission";
   const d = new Dec(value);
   if (d.gt(new Dec(max))) return `At most ${new Dec(max).toString()}`;
   if (!allowDecimals && !d.isInteger()) return "Whole marks only";
@@ -147,7 +147,7 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
         <CardHeader>
           <CardTitle>Marks</CardTitle>
           <CardDescription>
-            {editable ? "Type a mark and press Enter to move down. Type A if the student was absent (it counts as 0). Leave a box blank only if the mark is not available yet." : "Read only."}
+            {editable ? "Type a mark and press Enter to move down. Type A if the student was absent (it counts as 0), or N for a new admission who joined after this test (left out of their result). Leave a box blank only if the mark is not available yet." : "Read only."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -177,9 +177,10 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
                 <TableBody>
                   {sheet.students.map((s, row) => {
                     const cells = sheet.components.map((c) => values[key(s.enrollmentId, c.assessmentId)] ?? "");
-                    // An absence counts as 0, as in the result.
-                    const complete = cells.every((v) => v !== "" && (MARK_PATTERN.test(v) || isAbsentInput(v)));
-                    const total = complete ? cells.reduce((sum, v) => sum.plus(isAbsentInput(v) ? 0 : v), new Dec(0)) : null;
+                    // An absence counts as 0 and a new admission is left out, as in the result.
+                    const complete = cells.every((v) => v !== "" && (MARK_PATTERN.test(v) || isAbsentInput(v) || isNewAdmissionInput(v)));
+                    const sat = cells.filter((v) => !isNewAdmissionInput(v));
+                    const total = complete && sat.length ? sat.reduce((sum, v) => sum.plus(isAbsentInput(v) ? 0 : v), new Dec(0)) : null;
                     return (
                       <TableRow key={s.enrollmentId}>
                         <TableCell className="tabular-nums">{s.rollNumber}</TableCell>
@@ -198,6 +199,8 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
                                   <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Missing</span>
                                 ) : value === ABSENT ? (
                                   <span className="text-xs font-medium text-muted-foreground">Absent</span>
+                                ) : value === NEW_ADMISSION ? (
+                                  <span className="text-xs font-medium text-muted-foreground">New admission</span>
                                 ) : (
                                   value
                                 )}
@@ -217,7 +220,7 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
                                 className={cn("mx-auto h-9 w-20 text-center tabular-nums", value === "" && "border-dashed")}
                                 onChange={(e) => {
                                   const typed = e.target.value.replace(",", ".").trim();
-                                  const next = isAbsentInput(typed) ? ABSENT : typed;
+                                  const next = isAbsentInput(typed) ? ABSENT : isNewAdmissionInput(typed) ? NEW_ADMISSION : typed;
                                   setValues((v) => ({ ...v, [k]: next }));
                                   if (serverErrors[k])
                                     setServerErrors((errors) => {
@@ -282,7 +285,7 @@ export function MarksGrid({ sheet }: { sheet: MarkSheetView }) {
         description={
           missing > 0 ? (
             <p>
-              {missing} mark{missing === 1 ? " is" : "s are"} still missing. Enter every mark first — type A for an absent student; a blank box means not entered.
+              {missing} mark{missing === 1 ? " is" : "s are"} still missing. Enter every mark first — type A for an absent student or N for a new admission; a blank box means not entered.
             </p>
           ) : (
             <>

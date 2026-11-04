@@ -7,7 +7,10 @@ const stageSchema = z.enum(["monthly", "term"], { message: "Unknown result stage
 
 export const sheetKeySchema = z.object({ examTermId: idSchema, sectionId: idSchema, classSubjectId: idSchema, stage: stageSchema });
 
-/** One cell of the marks grid. Blank = not entered (missing); "A" = absent (counts as 0); "0" is a real score. */
+/**
+ * One cell of the marks grid. Blank = not entered (missing); "A" = absent (counts as 0); "N" = new
+ * admission (joined after this test: left out of the student's result); "0" is a real score.
+ */
 const markCellSchema = z.object({
   enrollmentId: idSchema,
   assessmentId: idSchema,
@@ -42,3 +45,7 @@ export const MARK_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
 /** What a teacher types for a student who was absent (either case). */
 export const ABSENT = "A";
 export const isAbsentInput = (value: string) => value.trim().toUpperCase() === ABSENT;
+
+/** What a teacher types for a student who joined the class after this test (either case). */
+export const NEW_ADMISSION = "N";
+export const isNewAdmissionInput = (value: string) => value.trim().toUpperCase() === NEW_ADMISSION;
