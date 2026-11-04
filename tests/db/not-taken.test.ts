@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "@/server/db/schema";
 import { listTermAssessments, prepareTermAssessments } from "@/server/services/exam-terms";
 import { approveMarkSheet, cellKey, getMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
-import { buildReportCards } from "@/server/services/report-cards";
+import { buildReportCards, groupLabel } from "@/server/services/report-cards";
 import { getClassResult } from "@/server/services/results";
 import { addClassSubjects, createSubject } from "@/server/services/subjects";
 import { createTestDb, rejectsWith, seedSchool, type TestDb } from "./helpers";
@@ -59,5 +59,14 @@ describe("subjects a student does not take", () => {
     expect(cards.cards[0].view.rows.map((r) => r.name)).toEqual(["English"]);
     expect(cards.cards[0].view).toMatchObject({ total: "20", maxTotal: "25", pct: "80.00", result: "PASS", newAdmission: false, absent: false });
     expect(cards.cards[1].view.rows.map((r) => r.name).sort()).toEqual(["Computer", "English"]);
+  });
+
+  it("names each student's own group from the subjects they take", () => {
+    const subjects = (...codes: string[]) => codes.map((code) => ({ code, includeInTotal: true }));
+    expect(groupLabel(subjects("ENG", "PHY", "CHEM", "BIO"))).toBe("Science group");
+    expect(groupLabel(subjects("ENG", "PHY", "CHEM", "COMP"))).toBe("Computer group");
+    expect(groupLabel(subjects("ENG", "PHY", "CHEM", "BIO", "COMP"))).toBe("Science group");
+    expect(groupLabel(subjects("ENG", "URDU", "COMP"))).toBe("General group");
+    expect(groupLabel([{ code: "PHY", includeInTotal: false }, { code: "ENG", includeInTotal: true }])).toBe("General group");
   });
 });

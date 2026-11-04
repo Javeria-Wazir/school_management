@@ -53,14 +53,29 @@ function passRules(rules: GradingRules): { long: string; short: string } {
   return { long: `Pass mark ${subject} in every compulsory subject${extra}.`, short: `pass mark ${subject} in every compulsory subject${extra}` };
 }
 
+/** The subjects a student takes: all of the class's, less those marked X ("not taken") throughout. */
+function takenSubjects(result: ClassResultView, student: ResultStudent) {
+  const notTaken = new Set(student.notTaken);
+  return result.subjects.filter((subject) => !subject.components.every((c) => notTaken.has(c.id)));
+}
+
+/**
+ * The student's own group, from the subjects they take: Biology → Science group; Physics/Chemistry with
+ * Computer instead of Biology → Computer group; no science subject → General group.
+ */
+export function groupLabel(subjects: readonly { code: string; includeInTotal: boolean }[]): string {
+  const codes = new Set(subjects.filter((s) => s.includeInTotal).map((s) => s.code));
+  if (![...SCIENCE].some((c) => codes.has(c))) return "General group";
+  if (!codes.has("BIO") && codes.has("COMP")) return "Computer group";
+  return "Science group";
+}
+
 function buildRows(result: ClassResultView, student: ResultStudent, places: number, show: { grades: boolean; status: boolean }): CardRow[] {
   const absent = new Set(student.absent);
   // Tests held before a new admission joined, or of a subject not taken: shown as "—" and left out of their totals.
   const notJoined = new Set([...student.newAdmission, ...student.notTaken]);
-  const notTaken = new Set(student.notTaken);
   // A subject the student does not take at all is not printed on their card.
-  const taken = result.subjects.filter((subject) => !subject.components.every((c) => notTaken.has(c.id)));
-  return taken.map((subject, i) => {
+  return takenSubjects(result, student).map((subject, i) => {
     // No outcome when the student joined after every test of this subject.
     const o = student.outcome.subjects.find((x) => x.subject.id === subject.id);
     const monthly = subject.components.find((c) => c.code === "MONTHLY");
@@ -131,7 +146,6 @@ export async function buildReportCards(
   const approvedOn = official && approvedAt ? formatCardDate(approvedAt) : "";
   const rules = passRules(result.rules);
   const classNo = result.section.className.replace(/^class\s+/i, "");
-  const science = result.subjects.some((s) => SCIENCE.has(s.code) && s.includeInTotal);
 
   const cards = students.map((student) => {
     const o = student.outcome;
@@ -158,7 +172,7 @@ export async function buildReportCards(
       classNo,
       classNoPadded: /^\d$/.test(classNo) ? `0${classNo}` : classNo,
       sectionName: result.section.name,
-      streamLabel: science ? "Science group" : "General group",
+      streamLabel: groupLabel(takenSubjects(result, student)),
       student: { name: student.fullName, roll: String(student.rollNumber), id: student.studentCode, guardian: student.guardianName || "—" },
       rows: buildRows(result, student, places, { grades: settings.showSubjectGrades, status: settings.showSubjectStatus }),
       total: noResult ? "—" : formatNumber(o.grandObtained, places),
