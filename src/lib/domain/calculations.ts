@@ -240,15 +240,3 @@ export function competitionRanks(values: Readonly<Record<string, Decimal | null>
   }
   return ranks;
 }
-
-export function mean(values: readonly Decimal[]): Decimal | null {
-  if (values.length === 0) return null;
-  return values.reduce((s, v) => s.plus(v), ZERO).dividedBy(values.length);
-}
-
-export function median(values: readonly Decimal[]): Decimal | null {
-  if (values.length === 0) return null;
-  const ordered = [...values].sort((a, b) => a.comparedTo(b));
-  const middle = Math.floor(ordered.length / 2);
-  return ordered.length % 2 ? ordered[middle] : ordered[middle - 1].plus(ordered[middle]).dividedBy(2);
-}

@@ -6,8 +6,6 @@ import {
   formatNumber,
   gradeFor,
   makeGradingRules,
-  mean,
-  median,
   percentage,
   roundHalfUp,
   subjectTotal,
@@ -263,18 +261,9 @@ describe("evaluateStudent", () => {
   });
 });
 
-describe("ranking and statistics", () => {
+describe("ranking", () => {
   it("uses standard competition ranking and skips missing values", () => {
     const ranks = competitionRanks({ a: new Dec(90), b: new Dec(85), c: new Dec(85), d: new Dec(70), e: null });
     expect(ranks).toEqual({ a: 1, b: 2, c: 2, d: 4 });
-  });
-
-  it("computes mean and median", () => {
-    const values = [new Dec(10), new Dec(20), new Dec(40)];
-    expect(mean(values)!.toDecimalPlaces(4).toString()).toBe("23.3333");
-    expect(median(values)!.toString()).toBe("20");
-    expect(median([new Dec(10), new Dec(20)])!.toString()).toBe("15");
-    expect(mean([])).toBeNull();
-    expect(median([])).toBeNull();
   });
 });

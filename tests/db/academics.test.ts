@@ -18,10 +18,7 @@ import { getSchoolSettings } from "@/server/services/settings";
 import {
   createStudent,
   listEnrolledStudents,
-  nextRollNumber,
   setStudentStatus,
-  updateEnrollment,
-  updateStudent,
   updateStudentWithEnrollment,
 } from "@/server/services/students";
 import { listStaff } from "@/server/services/staff";
@@ -128,7 +125,6 @@ describe("students and enrolments", () => {
     });
     const [row] = await listEnrolledStudents(t.db, yearId, { search: "ali" });
     expect(row).toMatchObject({ studentCode: "S-001", guardianPhone: "+923001234567", className: "Class 6", sectionName: "A", rollNumber: 1 });
-    expect(await nextRollNumber(t.db, yearId, class6)).toBe(2);
   });
 
   it("validates codes, phones, dates, roll numbers and the section's year", async () => {
@@ -144,9 +140,20 @@ describe("students and enrolments", () => {
 
   it("moves a student between sections and withdraws them when archived", async () => {
     const created = await createStudent(admin, { studentCode: "S-010", fullName: "Hina Ali", academicYearId: yearId, sectionId: sectionA, rollNumber: "10" });
-    await updateEnrollment(admin, { id: created.enrollmentId, sectionId: sectionB, rollNumber: "11" });
-    expect((await listEnrolledStudents(t.db, yearId, { sectionId: sectionB }))[0]).toMatchObject({ fullName: "Hina Ali", rollNumber: 11 });
-    await updateStudent(admin, { id: created.studentId, studentCode: "S-010", fullName: "Hina Ali Khan", guardianPhone: "+92 321 7654321" });
+    await updateStudentWithEnrollment(admin, {
+      studentId: created.studentId,
+      enrollmentId: created.enrollmentId,
+      studentCode: "S-010",
+      fullName: "Hina Ali Khan",
+      guardianPhone: "+92 321 7654321",
+      sectionId: sectionB,
+      rollNumber: "11",
+    });
+    expect((await listEnrolledStudents(t.db, yearId, { sectionId: sectionB }))[0]).toMatchObject({
+      fullName: "Hina Ali Khan",
+      guardianPhone: "+923217654321",
+      rollNumber: 11,
+    });
     await setStudentStatus(admin, { id: created.studentId, status: "transferred" });
     expect(await listEnrolledStudents(t.db, yearId, { sectionId: sectionB })).toHaveLength(0);
     expect((await listEnrolledStudents(t.db, yearId, { sectionId: sectionB, includeWithdrawn: true }))[0].enrollmentStatus).toBe("withdrawn");

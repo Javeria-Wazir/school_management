@@ -1,5 +1,5 @@
 /** Students (permanent record) and enrolments (student × academic year → class, section, roll number). */
-import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
 import { idSchema } from "@/lib/validation/common";
 import { createStudentSchema, studentStatusSchema, updateEnrollmentSchema, updateStudentSchema } from "@/lib/validation/academics";
 import { normalizePhone } from "@/lib/validation/phone";
@@ -124,20 +124,6 @@ export async function createStudent(ctx: ServiceContext, input: unknown): Promis
   });
 }
 
-export async function updateStudent(ctx: ServiceContext, input: unknown): Promise<void> {
-  assertAdmin(ctx.user);
-  const { id, ...data } = parseInput(updateStudentSchema, input);
-  await withActor(ctx.db, ctx.user.id, async (tx) => {
-    const guardianPhone = phoneOrError(data.guardianPhone, await getCountryCode(tx));
-    const updated = await tx
-      .update(students)
-      .set({ studentCode: data.studentCode, fullName: data.fullName, guardianName: data.guardianName ?? null, guardianPhone, dateOfBirth: checkDateOfBirth(data.dateOfBirth) })
-      .where(eq(students.id, id))
-      .returning({ id: students.id });
-    if (updated.length === 0) throw notFound("Student");
-  });
-}
-
 /** Archive/transfer/graduate a student. Their active enrolments are withdrawn at the same time. */
 export async function setStudentStatus(ctx: ServiceContext, input: unknown): Promise<void> {
   assertAdmin(ctx.user);
@@ -148,18 +134,6 @@ export async function setStudentStatus(ctx: ServiceContext, input: unknown): Pro
     if (status !== "active") {
       await tx.update(enrollments).set({ status: "withdrawn" }).where(and(eq(enrollments.studentId, id), eq(enrollments.status, "active")));
     }
-  });
-}
-
-/** Move to another section of the same year and/or change the roll number (refused once marks exist). */
-export async function updateEnrollment(ctx: ServiceContext, input: unknown): Promise<void> {
-  assertAdmin(ctx.user);
-  const data = parseInput(updateEnrollmentSchema, input);
-  await withActor(ctx.db, ctx.user.id, async (tx) => {
-    const [current] = await tx.select({ academicYearId: enrollments.academicYearId }).from(enrollments).where(eq(enrollments.id, data.id));
-    if (!current) throw notFound("Enrolment");
-    const { classId } = await sectionInYear(tx, data.sectionId, current.academicYearId);
-    await tx.update(enrollments).set({ sectionId: data.sectionId, classId, rollNumber: data.rollNumber }).where(eq(enrollments.id, data.id));
   });
 }
 
@@ -174,15 +148,6 @@ export async function setEnrollmentActive(ctx: ServiceContext, input: { id: unkn
       .returning({ id: enrollments.id });
     if (updated.length === 0) throw notFound("Enrolment");
   });
-}
-
-/** Next free roll number in a class for a year (a suggestion for the "Add student" form). */
-export async function nextRollNumber(db: Db, academicYearId: string, classId: string): Promise<number> {
-  const [row] = await db
-    .select({ max: sql<number | null>`max(${enrollments.rollNumber})` })
-    .from(enrollments)
-    .where(and(eq(enrollments.academicYearId, academicYearId), eq(enrollments.classId, classId)));
-  return (row?.max ?? 0) + 1;
 }
 
 /** Edit a student's details and their enrolment (section, roll number) together, all or nothing. */
