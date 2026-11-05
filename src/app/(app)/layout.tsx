@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { navigationFor } from "@/components/app/nav";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { UserMenu } from "@/components/app/user-menu";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 Dev mode · automatic sign-in
               </Badge>
             ) : null}
+            <ThemeToggle />
             <UserMenu fullName={user.fullName} email={user.email} roleLabel={label} canSignOut={!devAutoLogin} />
           </div>
         </header>

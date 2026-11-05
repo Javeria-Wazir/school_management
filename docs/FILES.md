@@ -126,7 +126,7 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 
 | Folder | What it does |
 |---|---|
-| `app/` | App building blocks: sidebar and navigation (`app-sidebar`, `nav`, `user-menu`), forms and dialogs (`form`, `form-dialog`, `form-select`, `confirm-dialog`, `text-dialog`), tables and filters (`data-table`, `url-select`, `row-actions`), `status-badge`, page headers and stat cards (`page`). |
+| `app/` | App building blocks: sidebar and navigation (`app-sidebar`, `nav`, `user-menu`), forms and dialogs (`form`, `form-dialog`, `form-select`, `confirm-dialog`, `text-dialog`), theme switch (`theme-provider`, `theme-toggle`: light / dark / same as device; print pages stay light), tables and filters (`data-table`, `url-select`, `row-actions`), `status-badge`, page headers and stat cards (`page`). |
 | `ui/` | shadcn/ui base controls: button, input, select, dialog, sheet, sidebar, table, etc. Unused parts were removed on 2026-11-04. |
 | `report-card/types.ts` | Data a printed card shows. |
 | `report-card/themes/theme-01 … theme-10.tsx` | The ten A4 card designs, Class 1 → theme 1 … Class 10 → theme 10. |

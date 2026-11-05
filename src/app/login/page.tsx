@@ -1,6 +1,7 @@
 import { GraduationCap } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/server/auth/current";
 import { getDb } from "@/server/db/client";
@@ -15,7 +16,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const settings = await getSchoolSettings(getDb());
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
+    <main className="relative flex min-h-svh items-center justify-center bg-muted/40 p-4">
+      <div className="absolute top-3 right-3">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
