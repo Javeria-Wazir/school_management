@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="no-print sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-4">
           <SidebarTrigger aria-label="Toggle navigation" />
           <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-5" />
-          <div className="flex min-w-0 items-center gap-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden text-sm">
             <span className="hidden text-muted-foreground sm:inline">Academic year</span>
             <Badge variant={settings.currentAcademicYearName ? "secondary" : "outline"}>{settings.currentAcademicYearName ?? "Not set"}</Badge>
             {settings.currentExamTermName ? (
@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <div className="ml-auto flex items-center gap-2">
             {devAutoLogin ? (
-              <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400" title="DEV_AUTO_LOGIN is set in .env.local">
+              <Badge variant="outline" className="hidden border-amber-500/60 text-amber-700 sm:inline-flex dark:text-amber-400" title="DEV_AUTO_LOGIN is set in .env.local">
                 Dev mode · automatic sign-in
               </Badge>
             ) : null}
