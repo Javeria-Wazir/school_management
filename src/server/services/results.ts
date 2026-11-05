@@ -15,7 +15,15 @@
  * A subject the student does not take ("X", e.g. Computer in the science group) is left out the same way.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { evaluateStudent, competitionRanks, makeGradingRules, type GradingRules, type StudentOutcome, type SubjectSpec } from "@/lib/domain/calculations";
+import {
+  evaluateStudent,
+  competitionRanks,
+  makeGradingRules,
+  type GradingRules,
+  type StudentOutcome,
+  type SubjectOutcome,
+  type SubjectSpec,
+} from "@/lib/domain/calculations";
 import { idSchema } from "@/lib/validation/common";
 import { remarksSchema, reopenResultSchema, resultKeySchema } from "@/lib/validation/results";
 import type { SessionUser } from "@/server/auth/session";
@@ -180,6 +188,22 @@ const OPEN_APPROVAL: ResultApprovalView = {
   reopenReason: null,
   reopenedAt: null,
 };
+
+/** What one student's cell for one subject holds: their marks, or why there are none (used by the result page and the Excel file). */
+export type SubjectCell =
+  | { kind: "notTaken" }
+  | { kind: "newAdmission" }
+  | { kind: "absent"; outcome: SubjectOutcome }
+  | { kind: "marks"; outcome: SubjectOutcome };
+
+export function subjectCell(result: ClassResultView, student: ResultStudent, subjectId: string): SubjectCell {
+  const subject = result.subjects.find((s) => s.id === subjectId)!;
+  const outcome = student.outcome.subjects.find((o) => o.subject.id === subjectId);
+  // No outcome: the student does not take the subject, or joined after every test of it.
+  if (!outcome) return subject.components.every((c) => student.notTaken.includes(c.id)) ? { kind: "notTaken" } : { kind: "newAdmission" };
+  const sat = subject.components.filter((c) => !student.newAdmission.includes(c.id) && !student.notTaken.includes(c.id));
+  return sat.every((c) => student.absent.includes(c.id)) ? { kind: "absent", outcome } : { kind: "marks", outcome };
+}
 
 /** Compile the monthly or term result of one section. Class teacher of that section or principal. */
 export async function getClassResult(ctx: ServiceContext, input: unknown): Promise<ClassResultView> {

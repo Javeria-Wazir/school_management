@@ -48,7 +48,8 @@ web/
 │  │  │  ├─ dashboard/              role dashboard
 │  │  │  ├─ account/                change own password
 │  │  │  └─ admin/                  principal-only pages (users, settings, academic years, …)
-│  │  └─ api/                       downloads (later modules)
+│  │  ├─ my-class/                  class teacher's own class (students, subjects)
+│  │  └─ api/                       downloads (student import template, class result Excel)
 │  ├─ components/ui/                shadcn/ui primitives
 │  ├─ components/app/               shell, stat cards, data table, page header, empty states
 │  ├─ lib/
@@ -182,8 +183,9 @@ from the source marks.
   sheets; an approved term result locks both (`app_private.result_locked(term, section, stage)`).
 * Implemented so far (services `marks.ts`, `results.ts`, `report-cards.ts`): draft → submitted →
   approved / returned, class approval, final approval, reopen, remarks. The class result compiles only
-  marks from submitted or approved sheets; a draft is still the teacher's working copy. The optional
-  *under_review* step and teacher-initiated correction requests are not built yet.
+  marks from submitted or approved sheets; a draft is still the teacher's working copy. Teacher-initiated
+  correction requests are built (accept returns the sheet, decline needs a note); the optional
+  *under_review* step is not used.
 
 ### Result cards
 
@@ -234,10 +236,10 @@ The app is deployed this way (README § 3 has the live URL and the exact steps t
 | 1 | Scaffold, schema + migrations + triggers, auth/sessions/RBAC, app shell, staff management, school settings, academic years, grading maths library | done |
 | 2 | Classes, sections, subjects, class subjects, students (+ Excel/CSV import with validation report), teacher assignments, exam terms, assessment configuration, grading scales | done |
 | 3 | Marks entry grid, drafts, submission, missing-mark detection | done |
-| 4 | Class teacher review, return/approve, consolidation, incomplete detection, remarks | done (correction requests to do) |
-| 5 | Class result sheet, class/principal approval, reopen | done (133 tests across all modules). To do: analytics and charts; snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result |
-| 6 | Themed A4 result cards | done. To do: Excel/CSV export, WhatsApp reminders |
-| 7 | Audit log viewer, security review, deployment hardening | |
+| 4 | Class teacher review, return/approve, consolidation, incomplete detection, remarks | done, including correction requests |
+| 5 | Class result sheet, class/principal approval, reopen | done, including subject analysis. To do: snapshot the percentage decimal places with each approval so a later settings change cannot alter an approved result |
+| 6 | Themed A4 result cards | done, plus Excel download of class results and a WhatsApp result message after final approval |
+| 7 | Audit log viewer, security review, deployment hardening | audit log page done; security review and automatic deploys to do |
 
 ## 10. Development and test databases
 

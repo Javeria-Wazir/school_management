@@ -14,7 +14,7 @@ import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
 import { openCorrectionsForSection } from "@/server/services/marks";
 import { subjectStatistics } from "@/server/services/result-stats";
-import { getClassResult } from "@/server/services/results";
+import { getClassResult, subjectCell, type ResultStudent } from "@/server/services/results";
 import { getSchoolSettings } from "@/server/services/settings";
 import { RemarksButton, ResultActions } from "./result-client";
 
@@ -61,6 +61,28 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
     else counts.incomplete += 1;
   }
   const printBase = `/print/results/${termId}/${sectionId}?stage=${stage}`;
+  /** WhatsApp link with the student's result for their guardian; only for an official (final-approved) result. */
+  const whatsappFor = (st: ResultStudent): string | null => {
+    if (approval.status !== "final_approved") return null;
+    const o = st.outcome;
+    const noResult = st.newAdmissionAll || st.absentAll;
+    return whatsappLink(
+      st.guardianPhone,
+      resultMessage({
+        schoolName: settings.schoolName,
+        className: `${result.section.className} ${result.section.name}`,
+        termName: result.term.name,
+        stageLabel: STAGE[stage].title,
+        studentName: st.fullName,
+        rollNumber: st.rollNumber,
+        total: noResult || !o.grandObtained ? null : `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}`,
+        percentage: noResult || !o.percentage ? null : o.percentage.toFixed(places),
+        grade: noResult ? null : (o.grade?.grade ?? null),
+        status: st.newAdmissionAll ? "New admission" : st.absentAll ? "Absent" : o.status,
+        position: settings.showClassPosition && st.position ? `${st.position} of ${result.students.length}` : null,
+      }),
+    );
+  };
 
   return (
     <>
@@ -277,28 +299,31 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                         <span className="block text-xs text-muted-foreground">{st.studentCode}</span>
                       </TableCell>
                       {result.subjects.map((subject) => {
-                        // No outcome when the student does not take this subject or joined after every test of it.
-                        const so = o.subjects.find((x) => x.subject.id === subject.id);
-                        const sat = subject.components.filter((c) => !st.newAdmission.includes(c.id) && !st.notTaken.includes(c.id));
+                        const cell = subjectCell(result, st, subject.id);
+                        const so = cell.kind === "absent" || cell.kind === "marks" ? cell.outcome : null;
                         return (
-                        <TableCell key={subject.id} className={cn("text-center tabular-nums", so?.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
-                          {!so && subject.components.every((c) => st.notTaken.includes(c.id)) ? (
-                            <span className="text-muted-foreground" title="Does not take this subject">X</span>
-                          ) : !so ? (
-                            <span className="text-muted-foreground" title="New admission (joined after this test)">N</span>
-                          ) : sat.every((c) => st.absent.includes(c.id)) ? (
-                            <span title="Absent (counts as 0)">A</span>
-                          ) : so.total.complete ? (
-                            <>
-                              {formatNumber(so.total.obtained, places)}
-                              {so.passed === false ? <span className="sr-only"> (failed)</span> : null}
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground" title={`${so.total.missing} mark${so.total.missing === 1 ? "" : "s"} missing`}>
-                              —
-                            </span>
-                          )}
-                        </TableCell>
+                          <TableCell key={subject.id} className={cn("text-center tabular-nums", so?.passed === false && "font-semibold text-red-700 dark:text-red-400")}>
+                            {cell.kind === "notTaken" ? (
+                              <span className="text-muted-foreground" title="Does not take this subject">
+                                X
+                              </span>
+                            ) : cell.kind === "newAdmission" ? (
+                              <span className="text-muted-foreground" title="New admission (joined after this test)">
+                                N
+                              </span>
+                            ) : cell.kind === "absent" ? (
+                              <span title="Absent (counts as 0)">A</span>
+                            ) : cell.outcome.total.complete ? (
+                              <>
+                                {formatNumber(cell.outcome.total.obtained, places)}
+                                {cell.outcome.passed === false ? <span className="sr-only"> (failed)</span> : null}
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground" title={`${cell.outcome.total.missing} mark${cell.outcome.total.missing === 1 ? "" : "s"} missing`}>
+                                —
+                              </span>
+                            )}
+                          </TableCell>
                         );
                       })}
                       <TableCell className="text-right tabular-nums">
@@ -323,37 +348,14 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                         <RemarksButton resultKey={resultKey} enrollmentId={st.enrollmentId} studentName={st.fullName} remarks={st.remarks} editable={access.canEditRemarks} />
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
-                        {(() => {
-                          // Only an official (final-approved) result is sent to parents.
-                          const noResult = st.newAdmissionAll || st.absentAll;
-                          const link =
-                            approval.status === "final_approved"
-                              ? whatsappLink(
-                                  st.guardianPhone,
-                                  resultMessage({
-                                    schoolName: settings.schoolName,
-                                    className: `${result.section.className} ${result.section.name}`,
-                                    termName: result.term.name,
-                                    stageLabel: STAGE[stage].title,
-                                    studentName: st.fullName,
-                                    rollNumber: st.rollNumber,
-                                    total: noResult || !o.grandObtained ? null : `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}`,
-                                    percentage: noResult || !o.percentage ? null : o.percentage.toFixed(places),
-                                    grade: noResult ? null : (o.grade?.grade ?? null),
-                                    status: st.newAdmissionAll ? "New admission" : st.absentAll ? "Absent" : o.status,
-                                    position: settings.showClassPosition && st.position ? `${st.position} of ${result.students.length}` : null,
-                                  }),
-                                )
-                              : null;
-                          return link ? (
-                            <Button asChild variant="ghost" size="icon" className="size-8">
-                              <a href={link} target="_blank" rel="noopener noreferrer" title={`Send the result to ${st.fullName}'s guardian on WhatsApp`}>
-                                <MessageCircle aria-hidden />
-                                <span className="sr-only">Send the result to {st.fullName}&apos;s guardian on WhatsApp</span>
-                              </a>
-                            </Button>
-                          ) : null;
-                        })()}
+                        {whatsappFor(st) ? (
+                          <Button asChild variant="ghost" size="icon" className="size-8">
+                            <a href={whatsappFor(st)!} target="_blank" rel="noopener noreferrer" title={`Send the result to ${st.fullName}'s guardian on WhatsApp`}>
+                              <MessageCircle aria-hidden />
+                              <span className="sr-only">Send the result to {st.fullName}&apos;s guardian on WhatsApp</span>
+                            </a>
+                          </Button>
+                        ) : null}
                         <Button asChild variant="ghost" size="icon" className="size-8">
                           <a href={`${printBase}&student=${st.enrollmentId}`} target="_blank" rel="noopener" title={`Print result card for ${st.fullName}`}>
                             <Printer aria-hidden />

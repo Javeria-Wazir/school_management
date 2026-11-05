@@ -9,7 +9,7 @@ import { assessments, assessmentTypes, auditLogs, classes, classSubjects, enroll
 import { assertAdmin, type ServiceContext } from "./guards";
 import { parseInput } from "./validate";
 
-export const AUDIT_PAGE_SIZE = 50;
+const AUDIT_PAGE_SIZE = 50;
 
 /** Areas the principal can filter by, in plain words (table name → label). */
 export const AUDIT_AREAS: Record<string, string> = {

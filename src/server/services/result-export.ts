@@ -5,19 +5,18 @@
  */
 import ExcelJS from "exceljs";
 import type { ServiceContext } from "./guards";
-import { getClassResult, type ClassResultView, type ResultStudent } from "./results";
+import { getClassResult, subjectCell, type ClassResultView, type ResultStudent } from "./results";
 import { getSchoolSettings } from "./settings";
 
 const STAGE_TITLE = { monthly: "Monthly result", term: "Term result" } as const;
 
 /** What a subject cell shows: the mark, or why there is none. Numbers stay numbers so Excel can sum them. */
-function subjectCell(result: ClassResultView, student: ResultStudent, subjectId: string): number | string {
-  const subject = result.subjects.find((s) => s.id === subjectId)!;
-  const outcome = student.outcome.subjects.find((o) => o.subject.id === subjectId);
-  if (!outcome) return subject.components.every((c) => student.notTaken.includes(c.id)) ? "X" : "N";
-  const sat = subject.components.filter((c) => !student.newAdmission.includes(c.id) && !student.notTaken.includes(c.id));
-  if (sat.length && sat.every((c) => student.absent.includes(c.id))) return "A";
-  return outcome.total.complete ? outcome.total.obtained!.toNumber() : "";
+function cellValue(result: ClassResultView, student: ResultStudent, subjectId: string): number | string {
+  const cell = subjectCell(result, student, subjectId);
+  if (cell.kind === "notTaken") return "X";
+  if (cell.kind === "newAdmission") return "N";
+  if (cell.kind === "absent") return "A";
+  return cell.outcome.total.complete ? cell.outcome.total.obtained!.toNumber() : "";
 }
 
 function statusOf(student: ResultStudent): string {
@@ -58,7 +57,7 @@ export async function exportClassResult(ctx: ServiceContext, input: unknown): Pr
       student.rollNumber,
       student.studentCode,
       student.fullName,
-      ...result.subjects.map((s) => subjectCell(result, student, s.id)),
+      ...result.subjects.map((s) => cellValue(result, student, s.id)),
       noResult || !o.grandObtained ? "" : o.grandObtained.toNumber(),
       student.newAdmissionAll ? "" : o.grandMaximum.toNumber(),
       noResult || !o.percentage ? "" : o.percentage.toNumber(),

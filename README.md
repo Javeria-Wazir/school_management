@@ -249,8 +249,8 @@ entered, submitted and approved on its own, and each result has its own approval
 | Role | How | Can |
 |---|---|---|
 | Principal / Administrator | account role *Principal / Administrator* | everything school-wide: staff, structure, grading, settings, final approval, reopening, audit log |
-| Class Teacher | a *Teacher* account chosen as class teacher of a section | review, approve and return that section's subject sheets; compile the class result; remarks; class-approve complete results; print result cards |
-| Subject Teacher | a *Teacher* account assigned to section × subject | enter, save and submit marks for those assignments only |
+| Class Teacher | a *Teacher* account chosen as class teacher of a section (*Staff accounts → Change class*) | review, approve and return that section's subject sheets and answer correction requests; compile the class result; remarks; class-approve complete results; print result cards and download them as Excel; **My class**: remove / restore / delete students and add or change the class's subjects (until the result is approved) |
+| Subject Teacher | a *Teacher* account assigned to section × subject | enter, save and submit marks for those assignments only; ask for a submitted sheet back with a correction request |
 
 One person can be both class teacher and subject teacher. Every permission is checked on the server for
 each request; hiding a button is only a convenience.
