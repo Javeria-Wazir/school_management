@@ -15,7 +15,20 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Dec } from "@/lib/domain/calculations";
 import { idSchema } from "@/lib/validation/common";
-import { ABSENT, isAbsentInput, isNewAdmissionInput, isNotTakenInput, MARK_PATTERN, NEW_ADMISSION, NOT_TAKEN, returnSheetSchema, saveMarksSchema, sheetKeySchema } from "@/lib/validation/results";
+import {
+  ABSENT,
+  correctionRequestSchema,
+  isAbsentInput,
+  isNewAdmissionInput,
+  isNotTakenInput,
+  MARK_PATTERN,
+  NEW_ADMISSION,
+  NOT_TAKEN,
+  resolveCorrectionSchema,
+  returnSheetSchema,
+  saveMarksSchema,
+  sheetKeySchema,
+} from "@/lib/validation/results";
 import type { SessionUser } from "@/server/auth/session";
 import type { Db, Tx } from "@/server/db/client";
 import { withActor } from "@/server/db/actor";
@@ -25,6 +38,7 @@ import {
   assessmentTypes,
   classes,
   classSubjects,
+  correctionRequests,
   enrollments,
   examTerms,
   markSheets,
@@ -302,6 +316,18 @@ export interface MarkSheetView {
   access: SheetAccess;
   /** Both stages of this subject, for switching between the Monthly Test and the term sheet. */
   stages: { stage: ResultStage; components: number; status: SheetStatus }[];
+  /** An open request from the subject teacher to get this submitted/approved sheet back. */
+  correction: OpenCorrection | null;
+  /** The subject teacher (or principal) may ask for the sheet back: it is submitted or approved and no request is open. */
+  canRequestCorrection: boolean;
+}
+
+export interface OpenCorrection {
+  id: string;
+  sheetId: string;
+  reason: string;
+  requestedByName: string;
+  requestedAt: Date;
 }
 
 export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise<MarkSheetView> {
@@ -340,8 +366,12 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     else if (m.value !== null) values[cellKey(m.enrollmentId, m.assessmentId)] = new Dec(m.value).toString();
   }
   const expected = studentRows.length * components.length;
+  const correction = c.sheet ? await openCorrection(ctx.db, c.sheet.id) : null;
+  const sentOn = c.sheet !== null && ["submitted", "under_review", "approved"].includes(c.sheet.status);
   return {
     key,
+    correction,
+    canRequestCorrection: sentOn && !correction && (ctx.user.role === "admin" || c.teacher?.id === ctx.user.id),
     sheetId: c.sheet?.id ?? null,
     termName: c.term.name,
     yearName: c.term.yearName,
@@ -558,6 +588,86 @@ export async function returnMarkSheet(ctx: ServiceContext, input: unknown): Prom
         .where(eq(markSheets.id, data.sheetId));
     },
     data.reason,
+  );
+}
+
+// -- correction requests --------------------------------------------------------------------------
+
+const openCorrectionColumns = {
+  id: correctionRequests.id,
+  sheetId: correctionRequests.markSheetId,
+  reason: correctionRequests.reason,
+  requestedByName: users.fullName,
+  requestedAt: correctionRequests.createdAt,
+};
+
+async function openCorrection(db: Db | Tx, sheetId: string): Promise<OpenCorrection | null> {
+  const [row] = await db
+    .select(openCorrectionColumns)
+    .from(correctionRequests)
+    .innerJoin(users, eq(users.id, correctionRequests.requestedBy))
+    .where(and(eq(correctionRequests.markSheetId, sheetId), eq(correctionRequests.status, "open")));
+  return row ?? null;
+}
+
+/** Open correction requests of one section and term (for the class result page). */
+export async function openCorrectionsForSection(db: Db, examTermId: string, sectionId: string): Promise<OpenCorrection[]> {
+  return db
+    .select(openCorrectionColumns)
+    .from(correctionRequests)
+    .innerJoin(users, eq(users.id, correctionRequests.requestedBy))
+    .innerJoin(markSheets, eq(markSheets.id, correctionRequests.markSheetId))
+    .where(and(eq(markSheets.examTermId, examTermId), eq(markSheets.sectionId, sectionId), eq(correctionRequests.status, "open")))
+    .orderBy(asc(correctionRequests.createdAt));
+}
+
+/**
+ * The subject teacher asks for a submitted or approved sheet back to correct it. The class teacher (or the
+ * principal) then accepts — the sheet is returned — or declines with a note. One open request per sheet.
+ */
+export async function requestCorrection(ctx: ServiceContext, input: unknown): Promise<void> {
+  const data = parseInput(correctionRequestSchema, input);
+  await withActor(
+    ctx.db,
+    ctx.user.id,
+    async (tx) => {
+      const c = await loadSheetById(tx, data.sheetId);
+      if (ctx.user.role !== "admin" && c.teacher?.id !== ctx.user.id) throw forbidden("Only the subject teacher of these marks can ask for a correction.");
+      if (!c.sheet || !["submitted", "under_review", "approved"].includes(c.sheet.status)) {
+        throw new AppError("RULE", "These marks are still with the subject teacher, so they can be changed directly.");
+      }
+      if (await openCorrection(tx, c.sheet.id)) throw new AppError("CONFLICT", "A correction request for these marks is already waiting for the class teacher.");
+      await tx.insert(correctionRequests).values({ markSheetId: c.sheet.id, requestedBy: ctx.user.id, reason: data.reason });
+    },
+    data.reason,
+  );
+}
+
+/** Accept (the sheet goes back to the subject teacher) or decline (with a note) an open correction request. */
+export async function resolveCorrection(ctx: ServiceContext, input: unknown): Promise<{ accepted: boolean }> {
+  const data = parseInput(resolveCorrectionSchema, input);
+  return withActor(
+    ctx.db,
+    ctx.user.id,
+    async (tx) => {
+      const [request] = await tx.select().from(correctionRequests).where(eq(correctionRequests.id, data.requestId));
+      if (!request) throw notFound("Correction request");
+      if (request.status !== "open") throw new AppError("CONFLICT", "This correction request has already been answered.");
+      const c = await loadSheetById(tx, request.markSheetId);
+      if (!sheetAccess(ctx.user, c).canReview) throw reviewForbidden(c);
+      if (data.accept && c.sheet && c.sheet.status !== "draft" && c.sheet.status !== "returned") {
+        await tx
+          .update(markSheets)
+          .set({ status: "returned", returnReason: `Correction requested: ${request.reason}`, reviewedBy: ctx.user.id, reviewedAt: new Date(), approvedBy: null, approvedAt: null })
+          .where(eq(markSheets.id, request.markSheetId));
+      }
+      await tx
+        .update(correctionRequests)
+        .set({ status: data.accept ? "accepted" : "rejected", resolvedBy: ctx.user.id, resolvedAt: new Date(), resolutionNote: data.note || null })
+        .where(eq(correctionRequests.id, request.id));
+      return { accepted: data.accept };
+    },
+    data.accept ? "Correction request accepted: marks returned to the subject teacher" : `Correction request declined: ${data.note}`,
   );
 }
 

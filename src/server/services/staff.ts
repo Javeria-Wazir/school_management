@@ -23,6 +23,8 @@ export interface StaffRow {
   lastLoginAt: Date | null;
   createdAt: Date;
   classTeacherOf: number;
+  /** Current-year classes this person is class teacher of, e.g. "Class 7 A". */
+  classNames: string | null;
   subjectAssignments: number;
 }
 
@@ -40,6 +42,8 @@ export async function listStaff(ctx: ServiceContext): Promise<StaffRow[]> {
       lastLoginAt: users.lastLoginAt,
       createdAt: users.createdAt,
       classTeacherOf: sql<number>`(select count(*)::int from sections s where s.class_teacher_id = "users"."id" and s.is_active)`,
+      classNames: sql<string | null>`(select string_agg(c.name || ' ' || s.name, ', ' order by c.sort_order, s.name) from sections s join classes c on c.id = s.class_id
+        where s.class_teacher_id = "users"."id" and s.is_active and s.academic_year_id = (select current_academic_year_id from school_settings where id = 1))`,
       subjectAssignments: sql<number>`(select count(*)::int from teacher_assignments ta where ta.teacher_id = "users"."id")`,
     })
     .from(users)

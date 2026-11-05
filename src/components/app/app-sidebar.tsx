@@ -15,6 +15,7 @@ import {
   UserCheck,
   Users,
   UsersRound,
+  History,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +50,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   grading: Award,
   marks: PenLine,
   results: FileSpreadsheet,
+  audit: History,
 };
 
 export function AppSidebar({ groups, schoolName, roleLabel }: { groups: NavGroup[]; schoolName: string; roleLabel: string }) {

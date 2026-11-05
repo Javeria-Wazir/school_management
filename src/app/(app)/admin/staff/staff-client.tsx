@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, Copy, KeyRound, MoreHorizontal, Pencil, Plus, UserCheck, UserX } from "lucide-react";
+import { Check, Copy, KeyRound, MoreHorizontal, Pencil, Plus, School, UserCheck, UserX } from "lucide-react";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/app/confirm-dialog";
@@ -18,11 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { idleState, type ActionResult } from "@/lib/action-result";
 import { ROLE_LABELS } from "@/lib/validation/staff";
 import type { StaffRow } from "@/server/services/staff";
-import { createStaffAction, resetStaffPasswordAction, setStaffActiveAction, updateStaffAction } from "./actions";
+import { createStaffAction, resetStaffPasswordAction, setStaffActiveAction, setTeacherClassAction, updateStaffAction } from "./actions";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
@@ -90,7 +91,78 @@ function TemporaryPasswordDialog({ value, onClose }: { value: { email: string; p
   );
 }
 
-export function CreateStaffDialog() {
+type SectionOption = { id: string; label: string; classTeacherId: string | null; classTeacherName: string | null };
+
+const NO_CLASS = "none";
+
+/** "Class 7 A — Ansa" so the principal sees whose class they are giving away. */
+function sectionLabel(s: SectionOption, teacherId?: string) {
+  if (!s.classTeacherName || s.classTeacherId === teacherId) return s.label;
+  return `${s.label} — now ${s.classTeacherName}`;
+}
+
+function ClassSelect({ sections, value, onChange, teacherId }: { sections: SectionOption[]; value: string; onChange: (v: string) => void; teacherId?: string }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id="sectionId" className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_CLASS}>No class (subject teacher only)</SelectItem>
+        {sections.map((s) => (
+          <SelectItem key={s.id} value={s.id}>
+            {sectionLabel(s, teacherId)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ChangeClassDialog({ row, sections, onClose }: { row: StaffRow | null; sections: SectionOption[]; onClose: () => void }) {
+  const current = row ? (sections.find((s) => s.classTeacherId === row.id)?.id ?? NO_CLASS) : NO_CLASS;
+  const [value, setValue] = useState(current);
+  const [saving, setSaving] = useState(false);
+  const chosen = sections.find((s) => s.id === value);
+  const replacing = chosen && chosen.classTeacherId && chosen.classTeacherId !== row?.id ? chosen.classTeacherName : null;
+  return (
+    <Dialog open={row !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change class · {row?.fullName}</DialogTitle>
+          <DialogDescription>The class this teacher is class teacher of this year. Subjects they teach are set in Teacher assignments.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-1.5">
+          <Label htmlFor="sectionId">Class teacher of</Label>
+          <ClassSelect sections={sections} value={value} onChange={setValue} teacherId={row?.id} />
+          {replacing ? <p className="text-xs text-amber-700 dark:text-amber-400">{replacing} will no longer be this class&apos;s teacher.</p> : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            disabled={saving || value === current}
+            onClick={async () => {
+              if (!row) return;
+              setSaving(true);
+              const result = await setTeacherClassAction(row.id, value);
+              setSaving(false);
+              if (!result.ok) return void toast.error(result.message);
+              toast.success(result.message);
+              onClose();
+            }}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CreateStaffDialog({ sections }: { sections: SectionOption[] }) {
+  const [sectionId, setSectionId] = useState(NO_CLASS);
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState<{ email: string; password: string } | null>(null);
   const [state, action] = useActionState(createStaffAction, idleState as ActionResult<{ temporaryPassword: string; email: string }>);
@@ -124,6 +196,10 @@ export function CreateStaffDialog() {
               <Input {...fieldProps("phone", errors?.phone)} type="tel" inputMode="tel" autoComplete="off" />
             </Field>
             <RoleSelect error={errors?.role} />
+            <Field id="sectionId" label="Class teacher of (optional)" hint="You can change this later with “Change class”.">
+              <ClassSelect sections={sections} value={sectionId} onChange={setSectionId} />
+              <input type="hidden" name="sectionId" value={sectionId} />
+            </Field>
             <DialogFooter>
               <SubmitButton pendingText="Creating…">Create account</SubmitButton>
             </DialogFooter>
@@ -169,8 +245,9 @@ function EditStaffDialog({ row, isSelf, onClose }: { row: StaffRow | null; isSel
 
 type Pending = { kind: "activate" | "deactivate" | "reset"; row: StaffRow } | null;
 
-export function StaffTable({ staff, currentUserId }: { staff: StaffRow[]; currentUserId: string }) {
+export function StaffTable({ staff, sections, currentUserId }: { staff: StaffRow[]; sections: SectionOption[]; currentUserId: string }) {
   const [editing, setEditing] = useState<StaffRow | null>(null);
+  const [changingClass, setChangingClass] = useState<StaffRow | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [shown, setShown] = useState<{ email: string; password: string } | null>(null);
 
@@ -199,7 +276,7 @@ export function StaffTable({ staff, currentUserId }: { staff: StaffRow[]; curren
       enableGlobalFilter: false,
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {row.original.classTeacherOf ? `Class teacher (${row.original.classTeacherOf}) · ` : ""}
+          {row.original.classNames ? `Class teacher of ${row.original.classNames} · ` : row.original.classTeacherOf ? `Class teacher (${row.original.classTeacherOf}) · ` : ""}
           {row.original.subjectAssignments} subject{row.original.subjectAssignments === 1 ? "" : "s"}
         </span>
       ),
@@ -244,6 +321,9 @@ export function StaffTable({ staff, currentUserId }: { staff: StaffRow[]; curren
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => setEditing(r)}>
                 <Pencil aria-hidden /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setChangingClass(r)} disabled={!r.isActive}>
+                <School aria-hidden /> Change class
               </DropdownMenuItem>
               {!isSelf ? (
                 <>
@@ -292,6 +372,7 @@ export function StaffTable({ staff, currentUserId }: { staff: StaffRow[]; curren
         searchText={(r) => `${r.fullName} ${r.email} ${r.phone ?? ""} ${ROLE_LABELS[r.role]}`}
         searchPlaceholder="Search by name or e-mail" emptyMessage="No staff accounts yet. Use “Add staff” to create one." />
       <EditStaffDialog row={editing} isSelf={editing?.id === currentUserId} onClose={() => setEditing(null)} />
+      <ChangeClassDialog key={changingClass?.id ?? "none"} row={changingClass} sections={sections} onClose={() => setChangingClass(null)} />
       <ConfirmDialog
         open={pending !== null}
         onOpenChange={(open) => !open && setPending(null)}

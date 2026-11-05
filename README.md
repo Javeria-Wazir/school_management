@@ -300,7 +300,8 @@ tests/unit, tests/db     Vitest; db tests run on PGlite with the real migrations
 | 1 | Project setup, schema and migrations, authentication and sessions, server-side RBAC, app shell, staff accounts, school settings and logo, academic years, grading maths library | **Done** (tested) |
 | 2 | Classes, sections and class teachers, subjects and class subjects (compulsory / counts in total), students and enrolments with Excel/CSV import and validation report, teacher assignments, exam terms, mark components and per-term maximum marks, grading scales | **Done** (tested) |
 | 3 | Marks entry grid for subject teachers, drafts, submission, missing-mark detection | **Done** (tested) |
-| 4 | Class teacher review (approve / return with reason), compilation of all subjects, incomplete results, remarks | **Done** (tested); teacher-initiated correction requests still to do |
-| 5 | Class result sheet, class and principal approval, reopen with reason | **Done** (tested); subject analytics and charts still to do |
-| 6 | Themed A4 result cards (10 designs, print / save as PDF) | **Done** (tested); Excel/CSV export and WhatsApp reminders still to do |
-| 7 | Audit log viewer, final security review, deployment hardening | Planned |
+| 4 | Class teacher review (approve / return with reason), compilation of all subjects, incomplete results, remarks | **Done** (tested), including teacher correction requests (accept returns the sheet, decline needs a note) |
+| 5 | Class result sheet, class and principal approval, reopen with reason | **Done** (tested), including subject analysis (average, highest, lowest, pass rate, top scorer) |
+| 6 | Themed A4 result cards (10 designs, print / save as PDF) | **Done** (tested), plus Excel download of class results and a WhatsApp result message to guardians after final approval |
+| 7 | Audit log viewer, final security review, deployment hardening | Audit log page **done** (tested); security review and automatic deploys from GitHub still to do |
+| + | Class teacher tools: **My class** (remove / restore / delete students, add and change class subjects); the principal changes a teacher's class from Staff accounts and can pick it when adding a teacher | **Done** (tested) |

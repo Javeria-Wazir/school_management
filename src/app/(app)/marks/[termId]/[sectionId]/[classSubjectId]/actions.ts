@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/action-result";
 import { runAction } from "@/server/actions";
 import { requireUser } from "@/server/auth/current";
-import { approveMarkSheet, returnMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
+import { approveMarkSheet, requestCorrection, resolveCorrection, returnMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
 
 type SheetKey = { examTermId: string; sectionId: string; classSubjectId: string; stage: "monthly" | "term" };
 type Cell = { enrollmentId: string; assessmentId: string; value: string };
@@ -48,5 +48,23 @@ export async function returnSheetAction(key: SheetKey, sheetId: string, reason: 
     await returnMarkSheet(ctx, { sheetId, reason });
     refresh(key);
     return { message: "Marks returned to the subject teacher." };
+  });
+}
+
+export async function requestCorrectionAction(key: SheetKey, sheetId: string, reason: string): Promise<ActionResult> {
+  const ctx = await requireUser();
+  return runAction(async () => {
+    await requestCorrection(ctx, { sheetId, reason });
+    refresh(key);
+    return { message: "Correction request sent to the class teacher." };
+  });
+}
+
+export async function resolveCorrectionAction(key: SheetKey, requestId: string, accept: boolean, note: string): Promise<ActionResult> {
+  const ctx = await requireUser();
+  return runAction(async () => {
+    await resolveCorrection(ctx, { requestId, accept, note: note || undefined });
+    refresh(key);
+    return { message: accept ? "Request accepted: the marks are back with the subject teacher." : "Request declined." };
   });
 }

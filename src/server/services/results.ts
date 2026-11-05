@@ -75,6 +75,8 @@ export interface ResultStudent {
   studentCode: string;
   fullName: string;
   guardianName: string | null;
+  /** International format (+923001234567), for the WhatsApp result message. */
+  guardianPhone: string | null;
   outcome: StudentOutcome;
   /** Competition rank by percentage among complete students; `null` while incomplete, absent or new for everything. */
   position: number | null;
@@ -246,6 +248,7 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
       studentCode: students.studentCode,
       fullName: students.fullName,
       guardianName: students.guardianName,
+      guardianPhone: students.guardianPhone,
       remarks: studentRemarks.remarks,
     })
     .from(enrollments)

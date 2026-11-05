@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, CheckCircle2, Printer, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileSpreadsheet, LifeBuoy, MessageCircle, Printer, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, StatCard } from "@/components/app/page";
@@ -9,8 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "@/lib/domain/calculations";
 import { cn } from "@/lib/utils";
+import { resultMessage, whatsappLink } from "@/lib/whatsapp";
 import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
+import { openCorrectionsForSection } from "@/server/services/marks";
+import { subjectStatistics } from "@/server/services/result-stats";
 import { getClassResult } from "@/server/services/results";
 import { getSchoolSettings } from "@/server/services/settings";
 import { RemarksButton, ResultActions } from "./result-client";
@@ -41,6 +44,13 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
   }
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
+  const stats = subjectStatistics(result);
+  // Open correction requests on this class's sheets, with the subject and test they belong to.
+  const corrections = (await openCorrectionsForSection(ctx.db, termId, sectionId)).flatMap((c) => {
+    const subject = result.subjects.find((s) => s.sheets.some((sh) => sh.sheetId === c.sheetId));
+    const sheet = subject?.sheets.find((sh) => sh.sheetId === c.sheetId);
+    return subject && sheet ? [{ ...c, subject, stage: sheet.stage }] : [];
+  });
   const { approval, readiness, access } = result;
   const counts = { pass: 0, fail: 0, incomplete: 0, absent: 0, newAdmission: 0 };
   for (const s of result.students) {
@@ -63,11 +73,18 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         title={`${result.section.className} ${result.section.name} · ${result.term.name} · ${STAGE[stage].title}`}
         description={`${result.term.yearName} · Class teacher: ${result.section.classTeacherName ?? "not set"} · Grading: ${result.rules.name}`}
         actions={
-          <Button asChild>
-            <a href={printBase} target="_blank" rel="noopener">
-              <Printer aria-hidden /> Print all {stage === "monthly" ? "monthly" : "term"} result cards
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <a href={`/api/results/export?term=${termId}&section=${sectionId}&stage=${stage}`} download>
+                <FileSpreadsheet aria-hidden /> Download Excel
+              </a>
+            </Button>
+            <Button asChild>
+              <a href={printBase} target="_blank" rel="noopener">
+                <Printer aria-hidden /> Print all {stage === "monthly" ? "monthly" : "term"} result cards
+              </a>
+            </Button>
+          </div>
         }
       />
       <nav aria-label="Result" className="flex flex-wrap gap-2">
@@ -111,6 +128,26 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
           />
         </CardHeader>
         <CardContent className="space-y-3">
+          {corrections.length ? (
+            <Alert>
+              <LifeBuoy aria-hidden />
+              <AlertTitle>
+                {corrections.length} correction request{corrections.length === 1 ? "" : "s"} waiting
+              </AlertTitle>
+              <AlertDescription>
+                <ul className="space-y-1">
+                  {corrections.map((c) => (
+                    <li key={c.id}>
+                      <Link className="font-medium underline underline-offset-2" href={`/marks/${termId}/${sectionId}/${c.subject.id}?stage=${c.stage}`}>
+                        {c.subject.name} · {STAGE[c.stage].short}
+                      </Link>{" "}
+                      — {c.requestedByName}: {c.reason}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {approval.status === "open" && approval.reopenReason && approval.reopenedAt ? (
             <Alert>
               <RotateCcw aria-hidden />
@@ -285,7 +322,38 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                       <TableCell>
                         <RemarksButton resultKey={resultKey} enrollmentId={st.enrollmentId} studentName={st.fullName} remarks={st.remarks} editable={access.canEditRemarks} />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right whitespace-nowrap">
+                        {(() => {
+                          // Only an official (final-approved) result is sent to parents.
+                          const noResult = st.newAdmissionAll || st.absentAll;
+                          const link =
+                            approval.status === "final_approved"
+                              ? whatsappLink(
+                                  st.guardianPhone,
+                                  resultMessage({
+                                    schoolName: settings.schoolName,
+                                    className: `${result.section.className} ${result.section.name}`,
+                                    termName: result.term.name,
+                                    stageLabel: STAGE[stage].title,
+                                    studentName: st.fullName,
+                                    rollNumber: st.rollNumber,
+                                    total: noResult || !o.grandObtained ? null : `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}`,
+                                    percentage: noResult || !o.percentage ? null : o.percentage.toFixed(places),
+                                    grade: noResult ? null : (o.grade?.grade ?? null),
+                                    status: st.newAdmissionAll ? "New admission" : st.absentAll ? "Absent" : o.status,
+                                    position: settings.showClassPosition && st.position ? `${st.position} of ${result.students.length}` : null,
+                                  }),
+                                )
+                              : null;
+                          return link ? (
+                            <Button asChild variant="ghost" size="icon" className="size-8">
+                              <a href={link} target="_blank" rel="noopener noreferrer" title={`Send the result to ${st.fullName}'s guardian on WhatsApp`}>
+                                <MessageCircle aria-hidden />
+                                <span className="sr-only">Send the result to {st.fullName}&apos;s guardian on WhatsApp</span>
+                              </a>
+                            </Button>
+                          ) : null;
+                        })()}
                         <Button asChild variant="ghost" size="icon" className="size-8">
                           <a href={`${printBase}&student=${st.enrollmentId}`} target="_blank" rel="noopener" title={`Print result card for ${st.fullName}`}>
                             <Printer aria-hidden />
@@ -301,6 +369,72 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
           </div>
         </CardContent>
       </Card>
+
+      {stats.some((s) => s.counted > 0) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Subject analysis</CardTitle>
+            <CardDescription>
+              How the class did in each subject, from the marks above. Students absent for the whole result, new admissions and subjects a student does not take are left out.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead className="text-right">Students</TableHead>
+                    <TableHead className="min-w-48">Average %</TableHead>
+                    <TableHead className="text-right">Highest %</TableHead>
+                    <TableHead className="text-right">Lowest %</TableHead>
+                    <TableHead className="min-w-48">Passed</TableHead>
+                    <TableHead>Top scorer</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.map((s) => (
+                    <TableRow key={s.subjectId}>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.counted || "—"}</TableCell>
+                      <TableCell>
+                        {s.average ? (
+                          <div className="flex items-center gap-2">
+                            <span className="w-14 text-right tabular-nums">{s.average.toFixed(places)}</span>
+                            <span className="h-2 flex-1 rounded-full bg-muted" aria-hidden>
+                              <span className="block h-2 rounded-full bg-primary" style={{ width: `${Math.min(100, s.average.toNumber())}%` }} />
+                            </span>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{s.highest ? s.highest.toFixed(places) : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.lowest ? s.lowest.toFixed(places) : "—"}</TableCell>
+                      <TableCell>
+                        {s.passRate ? (
+                          <div className="flex items-center gap-2">
+                            <span className="w-20 text-right text-xs tabular-nums">
+                              {s.passed} / {s.counted}
+                            </span>
+                            <span className="h-2 flex-1 rounded-full bg-muted" aria-hidden>
+                              <span className={cn("block h-2 rounded-full", s.passRate.lt(50) ? "bg-red-600" : "bg-emerald-600")} style={{ width: `${s.passRate.toNumber()}%` }} />
+                            </span>
+                            <span className="w-14 text-right text-xs tabular-nums">{s.passRate.toFixed(0)}%</span>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">{s.topStudents.join(", ") || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </>
   );
 }

@@ -30,6 +30,14 @@ const reasonSchema = z
 
 export const returnSheetSchema = z.object({ sheetId: idSchema, reason: reasonSchema });
 
+/** A subject teacher asks for a submitted/approved sheet back. */
+export const correctionRequestSchema = z.object({ sheetId: idSchema, reason: reasonSchema });
+
+/** The class teacher or principal accepts (sheet returned) or declines (with a note) a correction request. */
+export const resolveCorrectionSchema = z
+  .object({ requestId: idSchema, accept: z.boolean(), note: z.string().trim().max(500, "Use at most 500 characters").optional() })
+  .refine((v) => v.accept || (v.note?.length ?? 0) >= 5, { message: "Please say why (at least 5 characters)", path: ["note"] });
+
 export const resultKeySchema = z.object({ examTermId: idSchema, sectionId: idSchema, stage: stageSchema });
 export const reopenResultSchema = resultKeySchema.extend({ reason: reasonSchema });
 

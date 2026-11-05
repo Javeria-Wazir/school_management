@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
 import { getMarkSheet } from "@/server/services/marks";
+import { CorrectionPanel } from "./correction-panel";
 import { MarksGrid } from "./marks-grid";
 
 export const metadata = { title: "Enter marks" };
@@ -70,6 +71,7 @@ export default async function MarkSheetPage({ params, searchParams }: PageProps<
             </Link>
           ))}
       </nav>
+      <CorrectionPanel sheet={sheet} />
       <MarksGrid key={stage} sheet={sheet} />
     </>
   );

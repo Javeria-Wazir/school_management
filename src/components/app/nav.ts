@@ -12,7 +12,8 @@ export type NavIcon =
   | "terms"
   | "grading"
   | "marks"
-  | "results";
+  | "results"
+  | "audit";
 
 export interface NavItem {
   href: string;
@@ -31,7 +32,10 @@ export interface NavCapabilities {
 }
 
 export function navigationFor(caps: NavCapabilities): NavGroup[] {
-  const groups: NavGroup[] = [{ label: "Overview", items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }] }];
+  const overview: NavItem[] = [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }];
+  // Class teachers manage their own class's students and subjects; the principal has the full admin pages.
+  if (caps.isClassTeacher && !caps.isAdmin) overview.push({ href: "/my-class", label: "My class", icon: "classes" });
+  const groups: NavGroup[] = [{ label: "Overview", items: overview }];
   const results: NavItem[] = [{ href: "/marks", label: "Marks entry", icon: "marks" }];
   if (caps.isAdmin || caps.isClassTeacher) results.push({ href: "/results", label: "Class results", icon: "results" });
   groups.push({ label: "Results", items: results });
@@ -53,6 +57,7 @@ export function navigationFor(caps: NavCapabilities): NavGroup[] {
         { href: "/admin/staff", label: "Staff accounts", icon: "staff" },
         { href: "/admin/academic-years", label: "Academic years", icon: "calendar" },
         { href: "/admin/settings", label: "School settings", icon: "settings" },
+        { href: "/admin/audit-log", label: "Audit log", icon: "audit" },
       ],
     });
   }

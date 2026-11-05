@@ -78,6 +78,9 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 | `api/health` | `GET`: is the database reachable and migrated (used after deploys). |
 | `api/school-logo` | `GET`: the school logo for signed-in staff. |
 | `api/students/template` | `GET`: Excel template for the student import (admin only). |
+| `api/results/export` | `GET`: Excel download of a class result (class teacher or principal). |
+| `/admin/audit-log` | Who changed what, when and why (principal only). |
+| `/my-class` | Class teacher's own class: remove/restore/delete students, add and change subjects. |
 | `src/proxy.ts` | Sends visitors without a session cookie to `/login`. |
 
 ## Server logic (`web/src/server/`)
@@ -98,7 +101,11 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 | `services/guards.ts`, `services/validate.ts`, `services/capabilities.ts` | Who may do what; input checking. |
 | `services/auth.ts` | Sign-in and password change. |
 | `services/staff.ts`, `settings.ts`, `academic-years.ts`, `classes.ts`, `subjects.ts`, `students.ts`, `student-import.ts`, `assignments.ts`, `exam-terms.ts`, `grading.ts` | The admin features listed above, one file each. |
-| `services/marks.ts` | Marks entry and mark-sheet review. |
+| `services/marks.ts` | Marks entry, mark-sheet review and correction requests. |
+| `services/result-export.ts` | Excel file of a class result. |
+| `services/result-stats.ts` | Subject analysis for the class result page. |
+| `services/audit.ts` | Reads and explains the audit log. |
+| `services/my-class.ts` | My class (class teacher) and the principal's "change a teacher's class". |
 | `services/results.ts` | Compiling, approving and reopening class results. |
 | `services/report-cards.ts` | Turns an approved result into result-card data. |
 | `services/dashboard.ts` | Dashboard numbers. |
@@ -111,6 +118,7 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 | `lib/validation/*.ts` | Form rules for each area (staff, academics, results, settings, auth, phone numbers). |
 | `lib/action-result.ts` | The shape every form action returns. |
 | `lib/safe-redirect.ts` | Only same-site redirects after sign-in. |
+| `lib/whatsapp.ts` | WhatsApp result message and click-to-chat link. |
 | `lib/utils.ts` | `cn()` class-name helper. |
 | `hooks/use-mobile.ts` | Detects phone-width screens for the sidebar. |
 
@@ -118,7 +126,7 @@ and `actions.ts` (the Server Actions the form calls; each re-checks permissions)
 
 | Folder | What it does |
 |---|---|
-| `app/` | App building blocks: sidebar and navigation (`app-sidebar`, `nav`, `user-menu`), forms and dialogs (`form`, `form-dialog`, `form-select`, `confirm-dialog`), tables and filters (`data-table`, `url-select`, `row-actions`), `status-badge`, page headers and stat cards (`page`). |
+| `app/` | App building blocks: sidebar and navigation (`app-sidebar`, `nav`, `user-menu`), forms and dialogs (`form`, `form-dialog`, `form-select`, `confirm-dialog`, `text-dialog`), tables and filters (`data-table`, `url-select`, `row-actions`), `status-badge`, page headers and stat cards (`page`). |
 | `ui/` | shadcn/ui base controls: button, input, select, dialog, sheet, sidebar, table, etc. Unused parts were removed on 2026-11-04. |
 | `report-card/types.ts` | Data a printed card shows. |
 | `report-card/themes/theme-01 … theme-10.tsx` | The ten A4 card designs, Class 1 → theme 1 … Class 10 → theme 10. |
