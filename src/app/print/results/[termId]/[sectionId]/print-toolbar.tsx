@@ -13,6 +13,7 @@ export function PrintToolbar({
   subtitle,
   official,
   blackAndWhite,
+  twoUp,
   backHref,
   empty,
 }: {
@@ -20,12 +21,20 @@ export function PrintToolbar({
   subtitle: string;
   official: boolean;
   blackAndWhite: boolean;
+  /** Two cards per A4 sheet (A5 each) instead of one full-page card. */
+  twoUp: boolean;
   backHref: string;
   empty: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const setParam = (name: string, value: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === null) params.delete(name);
+    else params.set(name, value);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
   return (
     <header className="no-print sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
@@ -51,15 +60,16 @@ export function PrintToolbar({
           <Switch
             id="bw-preview"
             checked={blackAndWhite}
-            onCheckedChange={(on) => {
-              const params = new URLSearchParams(searchParams.toString());
-              if (on) params.set("bw", "1");
-              else params.delete("bw");
-              router.replace(`${pathname}?${params.toString()}`);
-            }}
+            onCheckedChange={(on) => setParam("bw", on ? "1" : null)}
           />
           <Label htmlFor="bw-preview" className="text-xs">
             Black &amp; white preview
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id="two-up" checked={twoUp} onCheckedChange={(on) => setParam("size", on ? null : "a4")} />
+          <Label htmlFor="two-up" className="text-xs">
+            Two cards per A4 page
           </Label>
         </div>
         <Button size="sm" disabled={empty} onClick={() => window.print()}>
@@ -67,7 +77,9 @@ export function PrintToolbar({
         </Button>
       </div>
       <p className="mx-auto max-w-5xl px-4 pb-2 text-xs text-muted-foreground">
-        In the print dialog choose paper size A4, margins &quot;None&quot; and turn on &quot;Background graphics&quot;. Save as PDF to share.
+        {twoUp
+          ? "Two cards per sheet: in the print dialog choose paper size A4, Landscape, margins \"None\" and turn on \"Background graphics\". Cut along the dashed line. Save as PDF to share."
+          : "In the print dialog choose paper size A4, margins \"None\" and turn on \"Background graphics\". Save as PDF to share."}
       </p>
     </header>
   );

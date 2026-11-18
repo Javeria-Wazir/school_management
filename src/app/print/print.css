@@ -1,4 +1,7 @@
-/* A4 result cards: one 794 × 1123 px card (A4 at 96 dpi) per printed page. */
+/*
+ * A4 result cards: one 794 × 1123 px card (A4 at 96 dpi) per printed page, or (default) two per
+ * landscape A4 sheet, each scaled to A5 (148.5 × 210 mm = 1/√2 of A4) with a dashed cutting line between.
+ */
 @page {
   size: A4;
   margin: 0;
@@ -27,13 +30,52 @@
   line-height: normal;
   color: #1e2a38;
 }
+.rc-sheet-2up {
+  display: flex;
+  width: 297mm;
+  height: 210mm;
+  margin: 0 auto 24px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(30, 42, 56, 0.18);
+}
+.rc-slot {
+  position: relative;
+  flex: none;
+  width: 148.5mm;
+  height: 210mm;
+  overflow: hidden;
+  line-height: normal;
+  color: #1e2a38;
+}
+/* Cutting guide between the two cards, drawn over the second card's left edge. */
+.rc-slot + .rc-slot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  border-left: 1px dashed #9aa6b2;
+}
+.rc-scale {
+  width: 794px;
+  height: 1123px;
+  transform: scale(0.7067); /* 794 × 1123 px → 561 × 794 px: just inside 148.5 × 210 mm */
+  transform-origin: top left;
+}
 .rc-page *,
 .rc-page *::before,
-.rc-page *::after {
+.rc-page *::after,
+.rc-slot *,
+.rc-slot *::before,
+.rc-slot *::after {
   box-sizing: content-box;
 }
 .rc-page img,
-.rc-page svg {
+.rc-page svg,
+.rc-slot img,
+.rc-slot svg {
   display: inline;
   max-width: none;
   vertical-align: baseline;
@@ -48,12 +90,14 @@
     overflow: visible;
     padding: 0;
   }
-  .rc-page {
+  .rc-page,
+  .rc-sheet-2up {
     margin: 0;
     box-shadow: none;
     break-after: page;
   }
-  .rc-page:last-child {
+  .rc-page:last-child,
+  .rc-sheet-2up:last-child {
     break-after: auto;
   }
 }
