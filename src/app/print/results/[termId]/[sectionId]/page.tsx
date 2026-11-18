@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CompactCard } from "@/components/report-card/compact-card";
 import { THEME_COMPONENTS } from "@/components/report-card/themes/components";
 import { parseStage } from "@/lib/domain/stages";
 import { requireUser } from "@/server/auth/current";
@@ -15,7 +16,7 @@ export default async function PrintResultsPage({ params, searchParams }: PagePro
   const query = await searchParams;
   const student = typeof query.student === "string" ? query.student : undefined;
   const blackAndWhite = query.bw === "1";
-  // Two cards (each A5, 71% of the A4 design) side by side on a landscape A4 sheet, unless full A4 is asked for.
+  // Two compact A5 cards side by side on a landscape A4 sheet, unless the full A4 design is asked for.
   const twoUp = query.size !== "a4";
   const stage = parseStage(query.stage);
   let set;
@@ -57,9 +58,7 @@ export default async function PrintResultsPage({ params, searchParams }: PagePro
             <div key={cards[0].enrollmentId} className="rc-sheet-2up">
               {cards.map((card) => (
                 <section key={card.enrollmentId} className="rc-slot" aria-label={`Result card for ${card.studentName}`}>
-                  <div className="rc-scale">
-                    <Theme v={card.view} />
-                  </div>
+                  <CompactCard v={card.view} />
                 </section>
               ))}
             </div>

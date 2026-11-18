@@ -69,7 +69,7 @@ export function PrintToolbar({
         <div className="flex items-center gap-2">
           <Switch id="two-up" checked={twoUp} onCheckedChange={(on) => setParam("size", on ? null : "a4")} />
           <Label htmlFor="two-up" className="text-xs">
-            Two cards per A4 page
+            Two compact cards per A4 page
           </Label>
         </div>
         <Button size="sm" disabled={empty} onClick={() => window.print()}>

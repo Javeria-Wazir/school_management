@@ -1,6 +1,7 @@
 /*
- * A4 result cards: one 794 × 1123 px card (A4 at 96 dpi) per printed page, or (default) two per
- * landscape A4 sheet, each scaled to A5 (148.5 × 210 mm = 1/√2 of A4) with a dashed cutting line between.
+ * Result cards: (default) two compact A5 cards (148.5 × 210 mm, components/report-card/compact-card.tsx)
+ * per landscape A4 sheet with a dashed cutting line between, or one full A4 design (794 × 1123 px, A4 at
+ * 96 dpi) per page.
  */
 @page {
   size: A4;
@@ -57,12 +58,6 @@
   left: 0;
   z-index: 1;
   border-left: 1px dashed #9aa6b2;
-}
-.rc-scale {
-  width: 794px;
-  height: 1123px;
-  transform: scale(0.7067); /* 794 × 1123 px → 561 × 794 px: just inside 148.5 × 210 mm */
-  transform-origin: top left;
 }
 .rc-page *,
 .rc-page *::before,
