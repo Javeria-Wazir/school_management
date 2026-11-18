@@ -59,6 +59,9 @@ import { assertAdmin, type ServiceContext } from "./guards";
 import { sheetStatusesForSection, submittedMarksForSection } from "./marks";
 import { parseInput } from "./validate";
 
+/** Sheet statuses whose marks count in a result ("in"): submitted, under review or approved. */
+const IN_STATUSES: string[] = ["submitted", "under_review", "approved"];
+
 /** Mark sheet stages a result is built from: a monthly result its own Monthly Test, the term result every stage of the term. */
 const sheetStagesFor = (stage: ResultStage, monthlyTests: number): ResultStage[] => (isMonthlyStage(stage) ? [stage] : stagesForTerm(monthlyTests));
 
@@ -123,10 +126,12 @@ export interface ClassResultView {
   students: ResultStudent[];
   rules: GradingRules;
   approval: ResultApprovalView;
-  /** Every result of the term (its monthly results, then the term result) with its status, for the page's switch. */
-  stageStatuses: { stage: ResultStage; status: ResultApprovalStatus }[];
+  /** Every result of the term (its monthly results, then the term result) with its status and how many of its
+   * mark sheets are in (submitted or approved), for the page's switch. */
+  stageStatuses: { stage: ResultStage; status: ResultApprovalStatus; sheetsSubmitted: number }[];
   requirePrincipalApproval: boolean;
-  readiness: { sheetsApproved: number; sheetsTotal: number; studentsComplete: number; studentsTotal: number; blockers: string[] };
+  /** `sheetsSubmitted` = sheets of this result submitted or approved; 0 = no marks have come in yet. */
+  readiness: { sheetsApproved: number; sheetsSubmitted: number; sheetsTotal: number; studentsComplete: number; studentsTotal: number; blockers: string[] };
   access: { isAdmin: boolean; isClassTeacher: boolean; canClassApprove: boolean; canFinalApprove: boolean; canReopen: boolean; canEditRemarks: boolean };
 }
 
@@ -358,10 +363,17 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     .where(and(eq(resultApprovals.examTermId, key.examTermId), eq(resultApprovals.sectionId, key.sectionId)));
   const approvalRow = approvalRows.find((a) => a.stage === key.stage);
   const approval: ResultApprovalView = approvalRow ? { ...approvalRow } : OPEN_APPROVAL;
-  const stageStatuses = termStages.map((stage) => ({ stage, status: approvalRows.find((a) => a.stage === stage)?.status ?? "open" }));
+  const activeSubjects = new Set(subjectRows.map((s) => s.classSubjectId));
+  const isIn = (status: string) => IN_STATUSES.includes(status);
+  const stageStatuses = termStages.map((stage) => ({
+    stage,
+    status: approvalRows.find((a) => a.stage === stage)?.status ?? "open",
+    sheetsSubmitted: sheets.filter((x) => x.stage === stage && activeSubjects.has(x.classSubjectId) && isIn(x.status)).length,
+  }));
 
   const neededSheets = resultSubjects.flatMap((s) => s.sheets);
   const sheetsApproved = neededSheets.filter((s) => s.status === "approved").length;
+  const sheetsSubmitted = neededSheets.filter((s) => isIn(s.status)).length;
   const studentsComplete = resultStudents.filter((s) => s.outcome.complete).length;
   const blockers: string[] = [];
   if (resultSubjects.length === 0) {
@@ -390,7 +402,7 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     approval,
     stageStatuses,
     requirePrincipalApproval: settings.requirePrincipalApproval,
-    readiness: { sheetsApproved, sheetsTotal: neededSheets.length, studentsComplete, studentsTotal: resultStudents.length, blockers },
+    readiness: { sheetsApproved, sheetsSubmitted, sheetsTotal: neededSheets.length, studentsComplete, studentsTotal: resultStudents.length, blockers },
     access: {
       isAdmin,
       isClassTeacher,
@@ -549,6 +561,8 @@ export interface StageSummary {
   /** "Monthly result", "Monthly 2 result", "Term result". */
   label: string;
   sheetsTotal: number;
+  /** Sheets submitted or approved (their marks count in the result). */
+  sheetsSubmitted: number;
   sheetsApproved: number;
   status: ResultApprovalStatus;
 }
@@ -591,10 +605,11 @@ export async function listClassResults(ctx: ServiceContext, input: unknown): Pro
     .innerJoin(assessmentTypes, eq(assessmentTypes.id, assessments.assessmentTypeId))
     .innerJoin(classSubjects, and(eq(classSubjects.id, assessments.classSubjectId), eq(classSubjects.isActive, true)))
     .where(eq(assessments.examTermId, examTermId));
-  const approvedSheets = await ctx.db
-    .select({ sectionId: markSheets.sectionId, classSubjectId: markSheets.classSubjectId, stage: markSheets.stage })
+  const inSheets = await ctx.db
+    .select({ sectionId: markSheets.sectionId, classSubjectId: markSheets.classSubjectId, stage: markSheets.stage, status: markSheets.status })
     .from(markSheets)
-    .where(and(eq(markSheets.examTermId, examTermId), inArray(markSheets.sectionId, sectionIds), eq(markSheets.status, "approved")));
+    .where(and(eq(markSheets.examTermId, examTermId), inArray(markSheets.sectionId, sectionIds), inArray(markSheets.status, ["submitted", "under_review", "approved"])));
+  const approvedSheets = inSheets.filter((x) => x.status === "approved");
   const approvals = await ctx.db
     .select({ sectionId: resultApprovals.sectionId, stage: resultApprovals.stage, status: resultApprovals.status })
     .from(resultApprovals)
@@ -606,10 +621,12 @@ export async function listClassResults(ctx: ServiceContext, input: unknown): Pro
     // One sheet per subject × stage, however many components the stage has.
     const keys = [...new Set(sheets.map((n) => `${n.classSubjectId}:${stageOfCode(n.code)}`))];
     const approved = keys.filter((k) => approvedSheets.some((a) => a.sectionId === sectionId && `${a.classSubjectId}:${a.stage}` === k)).length;
+    const submitted = keys.filter((k) => inSheets.some((a) => a.sectionId === sectionId && `${a.classSubjectId}:${a.stage}` === k)).length;
     return {
       stage,
       label: resultLabel(stage, term.monthlyTests),
       sheetsTotal: keys.length,
+      sheetsSubmitted: submitted,
       sheetsApproved: approved,
       status: approvals.find((a) => a.sectionId === sectionId && a.stage === stage)?.status ?? "open",
     };

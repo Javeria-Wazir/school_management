@@ -81,9 +81,15 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                             <p className="text-xs tabular-nums text-muted-foreground">
                               {summary.sheetsTotal === 0 ? (
                                 "No maximum marks set"
+                              ) : summary.sheetsSubmitted === 0 ? (
+                                "No marks yet"
                               ) : (
                                 <span className={summary.sheetsApproved === summary.sheetsTotal ? "text-emerald-700 dark:text-emerald-400" : undefined}>
-                                  {summary.sheetsApproved} of {summary.sheetsTotal} mark sheets approved
+                                  <span className="font-medium text-foreground">
+                                    {summary.sheetsSubmitted} of {summary.sheetsTotal} mark sheets in
+                                  </span>
+                                  {" · "}
+                                  {summary.sheetsApproved} approved
                                 </span>
                               )}
                             </p>

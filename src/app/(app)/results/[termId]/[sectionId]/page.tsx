@@ -1,7 +1,8 @@
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileSpreadsheet, LifeBuoy, MessageCircle, Printer, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardList, FileSpreadsheet, LifeBuoy, MessageCircle, Printer, RotateCcw } from "lucide-react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageHeader, StatCard } from "@/components/app/page";
+import { EmptyState, PageHeader, StatCard } from "@/components/app/page";
 import { ResultStatusBadge, SheetStatusBadge } from "@/components/app/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,10 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
   }
   const n = result.term.monthlyTests;
   const STAGE = (s: ResultStage) => stageText(s, n);
+  // Other results of this term that already have marks, to point to when this one has none.
+  const withMarks = result.stageStatuses.filter((x) => x.stage !== stage && x.sheetsSubmitted > 0);
+  // This result's own sheets (for the term result: the term examination) have no marks in yet.
+  const noMarksHere = (result.stageStatuses.find((x) => x.stage === stage)?.sheetsSubmitted ?? 0) === 0;
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const stats = subjectStatistics(result);
@@ -114,7 +119,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         }
       />
       <nav aria-label="Result" className="flex flex-wrap gap-2">
-        {result.stageStatuses.map(({ stage: s, status }) => (
+        {result.stageStatuses.map(({ stage: s, status, sheetsSubmitted }) => (
           <Link
             key={s}
             href={`/results/${termId}/${sectionId}?stage=${s}`}
@@ -123,7 +128,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
           >
             <span>
               {STAGE(s).title}
-              <span className="block text-xs font-normal text-muted-foreground">{STAGE(s).hint}</span>
+              <span className="block text-xs font-normal text-muted-foreground">{sheetsSubmitted === 0 ? "No marks yet" : STAGE(s).hint}</span>
             </span>
             <ResultStatusBadge status={s === stage ? approval.status : status} />
           </Link>
@@ -270,6 +275,26 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {noMarksHere ? (
+            <EmptyState icon={ClipboardList} title={`No ${stage === "term" ? "term" : STAGE(stage).short} marks yet`}>
+              No subject teacher has submitted marks for the {STAGE(stage).title.toLowerCase()} of {result.section.className} yet.
+              {withMarks.length ? (
+                <>
+                  {" "}
+                  Marks are in for{" "}
+                  {withMarks.map((x, i) => (
+                    <Fragment key={x.stage}>
+                      {i ? ", " : ""}
+                      <Link className="font-medium text-primary underline-offset-4 hover:underline" href={`/results/${termId}/${sectionId}?stage=${x.stage}`}>
+                        {STAGE(x.stage).title}
+                      </Link>
+                    </Fragment>
+                  ))}
+                  .
+                </>
+              ) : null}
+            </EmptyState>
+          ) : (
           <div className="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
@@ -373,6 +398,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
               </TableBody>
             </Table>
           </div>
+          )}
         </CardContent>
       </Card>
 

@@ -71,16 +71,23 @@ describe("a term with two monthly tests", () => {
       ["Pass", false],
       ["Fail", true],
     ]);
-    expect(view.stageStatuses.map((x) => x.stage)).toEqual(["monthly", "monthly_2", "term"]);
+    expect(view.stageStatuses.map((x) => [x.stage, x.sheetsSubmitted])).toEqual([
+      ["monthly", 0],
+      ["monthly_2", 1],
+      ["term", 0],
+    ]);
+    expect(view.readiness.sheetsSubmitted).toBe(1);
+    // A result with no marks in yet says so (the page shows "No marks yet" instead of an empty table).
+    expect((await getClassResult(s.classTeacher, resultKey("monthly"))).readiness.sheetsSubmitted).toBe(0);
     await classApproveResult(s.classTeacher, resultKey("monthly_2"));
     expect((await getClassResult(s.classTeacher, resultKey("monthly_2"))).approval.status).toBe("class_approved");
     // Monthly Test 1 can still be entered.
     expect((await getMarkSheet(s.subjectTeacher, key("monthly"))).access.canEdit).toBe(true);
     const [row] = await listClassResults(s.admin, s.term.id);
-    expect(row.stages.map((x) => [x.label, x.status, x.sheetsApproved, x.sheetsTotal])).toEqual([
-      ["Monthly 1 result", "open", 0, 1],
-      ["Monthly 2 result", "class_approved", 1, 1],
-      ["Term result", "open", 1, 3],
+    expect(row.stages.map((x) => [x.label, x.status, x.sheetsSubmitted, x.sheetsApproved, x.sheetsTotal])).toEqual([
+      ["Monthly 1 result", "open", 0, 0, 1],
+      ["Monthly 2 result", "class_approved", 1, 1, 1],
+      ["Term result", "open", 1, 1, 3],
     ]);
   });
 
