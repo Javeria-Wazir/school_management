@@ -33,6 +33,8 @@ describe("migrations and defaults", () => {
     const types = await t.db.select().from(schema.assessmentTypes).orderBy(schema.assessmentTypes.sortOrder);
     expect(types.map((x) => [x.code, x.defaultMaxMarks])).toEqual([
       ["MONTHLY", "25.00"],
+      ["MONTHLY_2", "25.00"],
+      ["MONTHLY_3", "25.00"],
       ["TERM_EXAM", "75.00"],
     ]);
 

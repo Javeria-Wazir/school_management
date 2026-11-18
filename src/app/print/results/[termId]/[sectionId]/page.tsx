@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { THEME_COMPONENTS } from "@/components/report-card/themes/components";
+import { parseStage } from "@/lib/domain/stages";
 import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
 import { buildReportCards } from "@/server/services/report-cards";
@@ -14,7 +15,7 @@ export default async function PrintResultsPage({ params, searchParams }: PagePro
   const query = await searchParams;
   const student = typeof query.student === "string" ? query.student : undefined;
   const blackAndWhite = query.bw === "1";
-  const stage = query.stage === "term" ? "term" : "monthly";
+  const stage = parseStage(query.stage);
   let set;
   try {
     set = await buildReportCards(ctx, { examTermId: termId, sectionId, stage, enrollmentId: student, blackAndWhite });

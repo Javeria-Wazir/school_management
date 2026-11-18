@@ -30,7 +30,7 @@ describe("new admissions", () => {
     expect(view.marks[cellKey(one.id, s.monthly.id)]).toBe("N");
     expect(view.missing).toBe(0);
     const [row] = await listMarkSheets(s.subjectTeacher, { examTermId: s.term.id, scope: "mine" });
-    expect(row.monthly.entered).toBe(2);
+    expect(row.stages[0].entered).toBe(2);
     // The database never stores a new admission together with a mark or an absence.
     await rejectsWith(
       t.db.update(schema.marks).set({ isNewAdmission: true, marksObtained: "5" }).where(eq(schema.marks.enrollmentId, two.id)),

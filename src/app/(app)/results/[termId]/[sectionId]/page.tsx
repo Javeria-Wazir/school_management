@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "@/lib/domain/calculations";
+import { monthlyNumber, parseStage, resultLabel, stageLabel, type ResultStage } from "@/lib/domain/stages";
 import { cn } from "@/lib/utils";
 import { resultMessage, whatsappLink } from "@/lib/whatsapp";
 import { requireUser } from "@/server/auth/current";
@@ -22,15 +23,16 @@ export const metadata = { title: "Class result" };
 
 const dateTime = (d: Date) => d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-const STAGE = {
-  monthly: { title: "Monthly result", short: "Monthly", hint: "Monthly Test only" },
-  term: { title: "Term result", short: "Term exam", hint: "Monthly Test + term examination" },
-} as const;
+/** Title, short sheet name and hint of each result of a term with `n` monthly tests. */
+function stageText(stage: ResultStage, n: number) {
+  if (stage === "term") return { title: "Term result", short: "Term exam", hint: n > 1 ? "Monthly Tests + term examination" : "Monthly Test + term examination" };
+  return { title: resultLabel(stage, n), short: n > 1 ? `Monthly ${monthlyNumber(stage)}` : "Monthly", hint: `${stageLabel(stage, n)} only` };
+}
 
 export default async function ClassResultPage({ params, searchParams }: PageProps<"/results/[termId]/[sectionId]">) {
   const ctx = await requireUser();
   const { termId, sectionId } = await params;
-  const stage = (await searchParams).stage === "term" ? "term" : "monthly";
+  const stage = parseStage((await searchParams).stage);
   const resultKey = { examTermId: termId, sectionId, stage } as const;
   let result;
   try {
@@ -42,6 +44,8 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
     }
     throw error;
   }
+  const n = result.term.monthlyTests;
+  const STAGE = (s: ResultStage) => stageText(s, n);
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const stats = subjectStatistics(result);
@@ -72,7 +76,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         schoolName: settings.schoolName,
         className: `${result.section.className} ${result.section.name}`,
         termName: result.term.name,
-        stageLabel: STAGE[stage].title,
+        stageLabel: STAGE(stage).title,
         studentName: st.fullName,
         rollNumber: st.rollNumber,
         total: noResult || !o.grandObtained ? null : `${formatNumber(o.grandObtained, places)} / ${formatNumber(o.grandMaximum, places)}`,
@@ -92,7 +96,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         </Link>
       </Button>
       <PageHeader
-        title={`${result.section.className} ${result.section.name} · ${result.term.name} · ${STAGE[stage].title}`}
+        title={`${result.section.className} ${result.section.name} · ${result.term.name} · ${STAGE(stage).title}`}
         description={`${result.term.yearName} · Class teacher: ${result.section.classTeacherName ?? "not set"} · Grading: ${result.rules.name}`}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -103,14 +107,14 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
             </Button>
             <Button asChild>
               <a href={printBase} target="_blank" rel="noopener">
-                <Printer aria-hidden /> Print all {stage === "monthly" ? "monthly" : "term"} result cards
+                <Printer aria-hidden /> Print all {stage === "term" ? "term" : STAGE(stage).short.toLowerCase()} result cards
               </a>
             </Button>
           </div>
         }
       />
       <nav aria-label="Result" className="flex flex-wrap gap-2">
-        {(["monthly", "term"] as const).map((s) => (
+        {result.stageStatuses.map(({ stage: s, status }) => (
           <Link
             key={s}
             href={`/results/${termId}/${sectionId}?stage=${s}`}
@@ -118,10 +122,10 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
             className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors hover:bg-muted/50", s === stage && "border-primary bg-primary/5 font-medium")}
           >
             <span>
-              {STAGE[s].title}
-              <span className="block text-xs font-normal text-muted-foreground">{STAGE[s].hint}</span>
+              {STAGE(s).title}
+              <span className="block text-xs font-normal text-muted-foreground">{STAGE(s).hint}</span>
             </span>
-            <ResultStatusBadge status={s === stage ? approval.status : result.otherStageStatus} />
+            <ResultStatusBadge status={s === stage ? approval.status : status} />
           </Link>
         ))}
       </nav>
@@ -161,7 +165,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                   {corrections.map((c) => (
                     <li key={c.id}>
                       <Link className="font-medium underline underline-offset-2" href={`/marks/${termId}/${sectionId}/${c.subject.id}?stage=${c.stage}`}>
-                        {c.subject.name} · {STAGE[c.stage].short}
+                        {c.subject.name} · {STAGE(c.stage).short}
                       </Link>{" "}
                       — {c.requestedByName}: {c.reason}
                     </li>
@@ -224,9 +228,9 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
         <CardHeader>
           <CardTitle>Subjects</CardTitle>
           <CardDescription>
-            {stage === "monthly"
-              ? "Only the Monthly Test is compiled, from submitted sheets."
-              : "The Monthly Test and the term examination are compiled together, from submitted sheets."}{" "}
+            {stage !== "term"
+              ? `Only the ${stageLabel(stage, n)} is compiled, from submitted sheets.`
+              : `The Monthly ${n > 1 ? "Tests" : "Test"} and the term examination are compiled together, from submitted sheets.`}{" "}
             Open a sheet to approve it or return it to its teacher.
           </CardDescription>
         </CardHeader>
@@ -248,7 +252,7 @@ export default async function ClassResultPage({ params, searchParams }: PageProp
                       href={`/marks/${termId}/${sectionId}/${s.id}?stage=${sheet.stage}`}
                       className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-muted/50"
                     >
-                      {STAGE[sheet.stage].short} <SheetStatusBadge status={sheet.status} />
+                      {STAGE(sheet.stage).short} <SheetStatusBadge status={sheet.status} />
                     </Link>
                   ))}
                 </div>

@@ -7,13 +7,14 @@
  * leaves the component out of that student's result, and so does "X" (the student does not take this
  * subject, e.g. Computer in the science group). Only missing marks block submission.
  * Workflow: draft → submitted → approved, or returned (with a reason) back to the teacher.
- * Each subject has two sheets per term: the Monthly Test (`monthly`) and the other components (`term`),
- * so monthly results can be published before the term examination.
+ * Each subject has one sheet per monthly test (`monthly`, `monthly_2`, `monthly_3`: as many as the term
+ * has) and one for the other components (`term`), so each monthly result can be published before the term examination.
  * The database triggers re-check ranges, decimals, locks and status transitions for every caller.
  */
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { Dec } from "@/lib/domain/calculations";
+import { isMonthlyStage, MONTHLY_CODES, MONTHLY_STAGES, stageOfCode, stagesForTerm } from "@/lib/domain/stages";
 import { idSchema } from "@/lib/validation/common";
 import {
   ABSENT,
@@ -66,7 +67,7 @@ export const cellKey = (enrollmentId: string, assessmentId: string) => `${enroll
 // -- loading and access ---------------------------------------------------------------------------
 
 interface SheetContext {
-  term: { id: string; name: string; academicYearId: string; yearName: string; marksDeadline: string | null };
+  term: { id: string; name: string; academicYearId: string; yearName: string; marksDeadline: string | null; monthlyTests: number };
   section: { id: string; name: string; classId: string; className: string; classTeacherId: string | null };
   classSubject: { id: string; subjectName: string; subjectCode: string };
   teacher: { id: string; fullName: string } | null;
@@ -78,7 +79,14 @@ interface SheetContext {
 async function loadSheetContext(db: Db | Tx, key: SheetKey): Promise<SheetContext> {
   const [row] = await db
     .select({
-      term: { id: examTerms.id, name: examTerms.name, academicYearId: examTerms.academicYearId, yearName: academicYears.name, marksDeadline: examTerms.marksDeadline },
+      term: {
+        id: examTerms.id,
+        name: examTerms.name,
+        academicYearId: examTerms.academicYearId,
+        yearName: academicYears.name,
+        marksDeadline: examTerms.marksDeadline,
+        monthlyTests: examTerms.monthlyTests,
+      },
       section: { id: sections.id, name: sections.name, classId: sections.classId, className: classes.name, classTeacherId: sections.classTeacherId },
       classSubject: { id: classSubjects.id, subjectName: subjects.name, subjectCode: subjects.code },
     })
@@ -92,7 +100,8 @@ async function loadSheetContext(db: Db | Tx, key: SheetKey): Promise<SheetContex
     )
     .innerJoin(subjects, eq(subjects.id, classSubjects.subjectId))
     .where(eq(sections.id, key.sectionId));
-  if (!row) throw notFound("Mark sheet");
+  // A monthly test the term does not have (e.g. Monthly Test 3 of a two-monthly term).
+  if (!row || !stagesForTerm(row.term.monthlyTests).includes(key.stage)) throw notFound("Mark sheet");
   const [teacher] = await db
     .select({ id: users.id, fullName: users.fullName })
     .from(teacherAssignments)
@@ -141,11 +150,11 @@ function sheetAccess(user: SessionUser, c: SheetContext): SheetAccess & { canVie
   };
 }
 
-/** The Monthly Test component is the "monthly" stage; every other component belongs to "term". */
-export const stageOfCode = (code: string): ResultStage => (code === "MONTHLY" ? "monthly" : "term");
+export { stageOfCode };
 
-/** The components of one stage: the Monthly Test alone, or every other component. */
-const stageFilter = (stage: ResultStage) => (stage === "monthly" ? eq(assessmentTypes.code, "MONTHLY") : ne(assessmentTypes.code, "MONTHLY"));
+/** The components of one stage: that Monthly Test alone, or every non-monthly component. */
+const stageFilter = (stage: ResultStage) =>
+  isMonthlyStage(stage) ? eq(assessmentTypes.code, MONTHLY_CODES[MONTHLY_STAGES.indexOf(stage)]) : notInArray(assessmentTypes.code, [...MONTHLY_CODES]);
 
 async function loadComponents(db: Db | Tx, examTermId: string, classSubjectId: string, stage: ResultStage) {
   return db
@@ -186,8 +195,9 @@ async function countMissing(db: Db | Tx, sheetId: string | null, key: SheetKey) 
 
 // -- lists ----------------------------------------------------------------------------------------
 
-/** One stage (Monthly Test or term components) of one subject's marks in a section. */
+/** One stage (a Monthly Test or the term components) of one subject's marks in a section. */
 export interface StageCell {
+  stage: ResultStage;
   sheetId: string | null;
   status: SheetStatus;
   /** Components of this stage with maximum marks this term (0 = the stage does not apply). */
@@ -209,18 +219,18 @@ export interface MarkSheetRow {
   teacherName: string | null;
   classTeacherId: string | null;
   students: number;
-  monthly: StageCell;
-  term: StageCell;
+  /** One cell per stage of the term: its monthly tests, then the term examination. */
+  stages: StageCell[];
 }
 
 /**
- * Subjects of a term with both stages' sheets: `mine` = the signed-in teacher's subjects, `class` =
+ * Subjects of a term with every stage's sheets: `mine` = the signed-in teacher's subjects, `class` =
  * subjects of the sections they are class teacher of, `all` = every subject (principal only).
  */
 export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: unknown; scope: "mine" | "class" | "all" }): Promise<MarkSheetRow[]> {
   const examTermId = parseInput(idSchema, input.examTermId);
   if (input.scope === "all") assertAdmin(ctx.user);
-  const [term] = await ctx.db.select({ yearId: examTerms.academicYearId }).from(examTerms).where(eq(examTerms.id, examTermId));
+  const [term] = await ctx.db.select({ yearId: examTerms.academicYearId, monthlyTests: examTerms.monthlyTests }).from(examTerms).where(eq(examTerms.id, examTermId));
   if (!term) throw notFound("Exam term");
   const scopeFilter =
     input.scope === "mine" ? eq(teacherAssignments.teacherId, ctx.user.id) : input.scope === "class" ? eq(sections.classTeacherId, ctx.user.id) : undefined;
@@ -279,6 +289,7 @@ export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: u
   const cell = (sectionId: string, classSubjectId: string, stage: ResultStage): StageCell => {
     const sheet = sheets.get(`${sectionId}:${classSubjectId}:${stage}`);
     return {
+      stage,
       sheetId: sheet?.id ?? null,
       status: sheet?.status ?? "not_started",
       components: components.get(`${classSubjectId}:${stage}`) ?? 0,
@@ -286,7 +297,8 @@ export async function listMarkSheets(ctx: ServiceContext, input: { examTermId: u
       returnReason: sheet?.status === "returned" ? sheet.returnReason : null,
     };
   };
-  return rows.map((r) => ({ ...r, examTermId, monthly: cell(r.sectionId, r.classSubjectId, "monthly"), term: cell(r.sectionId, r.classSubjectId, "term") }));
+  const stages = stagesForTerm(term.monthlyTests);
+  return rows.map((r) => ({ ...r, examTermId, stages: stages.map((stage) => cell(r.sectionId, r.classSubjectId, stage)) }));
 }
 
 // -- one sheet ------------------------------------------------------------------------------------
@@ -295,6 +307,8 @@ export interface MarkSheetView {
   key: SheetKey;
   sheetId: string | null;
   termName: string;
+  /** Monthly tests in the term (for naming them "Monthly Test" or "Monthly Test 2"). */
+  monthlyTests: number;
   yearName: string;
   className: string;
   sectionName: string;
@@ -314,7 +328,7 @@ export interface MarkSheetView {
   expected: number;
   missing: number;
   access: SheetAccess;
-  /** Both stages of this subject, for switching between the Monthly Test and the term sheet. */
+  /** Every stage of this subject in the term, for switching between the Monthly Tests and the term sheet. */
   stages: { stage: ResultStage; components: number; status: SheetStatus }[];
   /** An open request from the subject teacher to get this submitted/approved sheet back. */
   correction: OpenCorrection | null;
@@ -374,6 +388,7 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     canRequestCorrection: sentOn && !correction && (ctx.user.role === "admin" || c.teacher?.id === ctx.user.id),
     sheetId: c.sheet?.id ?? null,
     termName: c.term.name,
+    monthlyTests: c.term.monthlyTests,
     yearName: c.term.yearName,
     className: c.section.className,
     sectionName: c.section.name,
@@ -392,7 +407,7 @@ export async function getMarkSheet(ctx: ServiceContext, input: unknown): Promise
     expected,
     missing: expected - Object.keys(values).length,
     access: { canEdit: access.canEdit && components.length > 0, canReview: access.canReview, canApprove: access.canApprove },
-    stages: (["monthly", "term"] as const).map((stage) => ({
+    stages: stagesForTerm(c.term.monthlyTests).map((stage) => ({
       stage,
       components: allComponents.filter((a) => stageOfCode(a.code) === stage).length,
       status: stageSheets.find((s) => s.stage === stage)?.status ?? "not_started",

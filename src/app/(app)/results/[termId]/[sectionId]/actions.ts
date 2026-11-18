@@ -5,8 +5,9 @@ import type { ActionResult } from "@/lib/action-result";
 import { runAction } from "@/server/actions";
 import { requireUser } from "@/server/auth/current";
 import { classApproveResult, finalApproveResult, reopenResult, saveRemarks } from "@/server/services/results";
+import type { ResultStage } from "@/lib/domain/stages";
 
-type ResultKey = { examTermId: string; sectionId: string; stage: "monthly" | "term" };
+type ResultKey = { examTermId: string; sectionId: string; stage: ResultStage };
 
 function refresh(key: ResultKey) {
   revalidatePath(`/results/${key.examTermId}/${key.sectionId}`);

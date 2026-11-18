@@ -48,8 +48,8 @@ describe("marks entry", () => {
 
   it("lists both stages per subject and scope", async () => {
     const [row] = await listMarkSheets(s.subjectTeacher, { examTermId: s.term.id, scope: "mine" });
-    expect(row.monthly).toMatchObject({ components: 1, status: "draft", entered: 0 });
-    expect(row.term).toMatchObject({ components: 1, status: "draft", entered: 0 });
+    expect(row.stages[0]).toMatchObject({ components: 1, status: "draft", entered: 0 });
+    expect(row.stages[1]).toMatchObject({ components: 1, status: "draft", entered: 0 });
     expect(await listMarkSheets(s.classTeacher, { examTermId: s.term.id, scope: "mine" })).toHaveLength(0);
     expect(await listMarkSheets(s.classTeacher, { examTermId: s.term.id, scope: "class" })).toHaveLength(1);
     await rejectsWith(listMarkSheets(s.subjectTeacher, { examTermId: s.term.id, scope: "all" }), /Only the principal/);
@@ -159,8 +159,10 @@ describe("monthly result", () => {
     const [row] = await listClassResults(s.classTeacher, s.term.id);
     expect(row).toMatchObject({
       students: 2,
-      monthly: { status: "class_approved", sheetsApproved: 1, sheetsTotal: 1 },
-      term: { status: "open", sheetsApproved: 1, sheetsTotal: 2 },
+      stages: [
+        { stage: "monthly", label: "Monthly result", status: "class_approved", sheetsApproved: 1, sheetsTotal: 1 },
+        { stage: "term", label: "Term result", status: "open", sheetsApproved: 1, sheetsTotal: 2 },
+      ],
     });
   });
 

@@ -1,9 +1,10 @@
+import { parseStage } from "@/lib/domain/stages";
 import { getCurrentUser } from "@/server/auth/current";
 import { getDb } from "@/server/db/client";
 import { toAppError } from "@/server/errors";
 import { exportClassResult } from "@/server/services/result-export";
 
-/** Excel download of a class result (?term=…&section=…&stage=monthly|term). Class teacher of the section or principal. */
+/** Excel download of a class result (?term=…&section=…&stage=monthly|monthly_2|monthly_3|term). Class teacher of the section or principal. */
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   try {
     const { buffer, filename } = await exportClassResult(
       { db: getDb(), user },
-      { examTermId: params.get("term"), sectionId: params.get("section"), stage: params.get("stage") === "term" ? "term" : "monthly" },
+      { examTermId: params.get("term"), sectionId: params.get("section"), stage: parseStage(params.get("stage")) },
     );
     return new Response(new Uint8Array(buffer), {
       headers: {

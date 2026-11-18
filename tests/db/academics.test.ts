@@ -7,11 +7,13 @@ import { createClass, createSection, deleteClass, deleteSection, listClasses, li
 import {
   createExamTerm,
   deleteExamTerm,
+  listExamTerms,
   listTermAssessments,
   prepareTermAssessments,
   setCurrentExamTerm,
   setMaxMarks,
   updateAssessmentType,
+  updateExamTerm,
 } from "@/server/services/exam-terms";
 import { deleteGradingScale, listGradingScales, saveGradingScale, setDefaultGradingScale } from "@/server/services/grading";
 import { getSchoolSettings } from "@/server/services/settings";
@@ -222,6 +224,21 @@ describe("exam terms and maximum marks", () => {
     await rejectsWith(createExamTerm(admin, { academicYearId: yearId, name: "Bad", startDate: "2026-09-20", endDate: "2026-09-01" }), /on or after/);
   });
 
+  it("gives a term only the monthly tests it has, and adds or removes them when the number changes", async () => {
+    const termId = (await createExamTerm(admin, { academicYearId: yearId, name: "Second Term", monthlyTests: "2" })).id;
+    const codes = async () => [...new Set((await listTermAssessments(t.db, termId)).map((r) => r.assessmentTypeName))];
+    expect(await prepareTermAssessments(admin, termId)).toEqual({ created: 6 }); // 2 subjects × (Monthly 1, Monthly 2, Term)
+    expect(await codes()).toEqual(["Monthly Test", "Monthly Test 2", "Term Examination"]);
+    await updateExamTerm(admin, { id: termId, name: "Second Term", monthlyTests: "3", isActive: "on" });
+    expect(await codes()).toEqual(["Monthly Test", "Monthly Test 2", "Monthly Test 3", "Term Examination"]);
+    // Editing other fields (no number sent) keeps the monthly tests.
+    await updateExamTerm(admin, { id: termId, name: "Second Term", isActive: "on" });
+    expect((await listExamTerms(t.db, yearId)).find((x) => x.id === termId)?.monthlyTests).toBe(3);
+    await updateExamTerm(admin, { id: termId, name: "Second Term", monthlyTests: "2", isActive: "on" });
+    expect(await codes()).toEqual(["Monthly Test", "Monthly Test 2", "Term Examination"]);
+    await rejectsWith(updateExamTerm(admin, { id: termId, name: "Second Term", monthlyTests: "4", isActive: "on" }), /at most 3/);
+  });
+
   it("makes a term current only if it is active and in the current year", async () => {
     const [term] = await t.db.select().from(schema.examTerms).where(eq(schema.examTerms.academicYearId, yearId));
     await setCurrentExamTerm(admin, term.id);
@@ -281,7 +298,7 @@ describe("list counts (regression: correlated subqueries must reference the oute
     const subjectRows = await listSubjects(t.db, yearId);
     expect(subjectRows.find((s) => s.id === english)?.classCount).toBe(1);
     const year = (await listAcademicYears(t.db)).find((y) => y.id === yearId)!;
-    expect(year).toMatchObject({ sectionCount: 2, termCount: 1, studentCount: 3 });
+    expect(year).toMatchObject({ sectionCount: 2, termCount: 2, studentCount: 3 }); // First Term and Second Term
   });
 
   it("counts a teacher's class-teacher sections and subject assignments, and a scale's terms", async () => {

@@ -16,6 +16,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber, toDecimal, Dec } from "@/lib/domain/calculations";
+import { MAX_MONTHLY_TESTS } from "@/lib/domain/stages";
 import type { AssessmentTypeRow, ExamTermRow, TermAssessmentRow } from "@/server/services/exam-terms";
 import {
   deleteExamTermAction,
@@ -27,6 +28,10 @@ import {
 } from "./actions";
 
 type Option = { value: string; label: string };
+const MONTHLY_TEST_OPTIONS: Option[] = Array.from({ length: MAX_MONTHLY_TESTS }, (_, i) => ({
+  value: String(i + 1),
+  label: i === 0 ? "1 monthly test" : `${i + 1} monthly tests`,
+}));
 const dateFormat = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" });
 const fmt = (iso: string | null) => (iso ? dateFormat.format(new Date(`${iso}T00:00:00Z`)) : "—");
 
@@ -75,6 +80,14 @@ export function ExamTermDialog({
             <Field id="gradingScaleId" label="Grading scale" error={e?.gradingScaleId} hint="Leave as default unless this term uses different grades.">
               <FormSelect id="gradingScaleId" name="gradingScaleId" options={scaleOptions} defaultValue={row?.gradingScaleId} noneLabel="Default scale" />
             </Field>
+            <Field
+              id="monthlyTests"
+              label="Monthly tests"
+              error={e?.monthlyTests}
+              hint="Each monthly test has its own mark sheets and result; the term result comes after the term examination."
+            >
+              <FormSelect id="monthlyTests" name="monthlyTests" options={MONTHLY_TEST_OPTIONS} defaultValue={String(row?.monthlyTests ?? 1)} invalid={!!e?.monthlyTests} />
+            </Field>
           </div>
           {row ? <SwitchField id="isActive" label="Active" description="Inactive terms are hidden from marks entry." defaultChecked={row.isActive} /> : null}
         </>
@@ -97,6 +110,7 @@ export function ExamTermsTable({ terms, scaleOptions }: { terms: ExamTermRow[]; 
       ),
     },
     { id: "dates", header: "Dates", cell: ({ row }) => <span className="text-sm whitespace-nowrap">{row.original.startDate || row.original.endDate ? `${fmt(row.original.startDate)} – ${fmt(row.original.endDate)}` : "—"}</span> },
+    { accessorKey: "monthlyTests", header: "Monthly tests", enableGlobalFilter: false, cell: ({ row }) => <span className="tabular-nums">{row.original.monthlyTests}</span> },
     { accessorKey: "marksDeadline", header: "Marks deadline", cell: ({ row }) => <span className="text-sm whitespace-nowrap">{fmt(row.original.marksDeadline)}</span> },
     { id: "scale", accessorFn: (r) => r.gradingScaleName ?? "", header: "Grading scale", cell: ({ row }) => row.original.gradingScaleName ?? <span className="text-muted-foreground">Default</span> },
     { accessorKey: "isActive", header: "Status", enableGlobalFilter: false, cell: ({ row }) => <ActiveText active={row.original.isActive} /> },

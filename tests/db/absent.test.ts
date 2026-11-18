@@ -30,7 +30,7 @@ describe("absent students", () => {
     expect(view.marks[cellKey(one.id, s.monthly.id)]).toBe("A");
     expect(view.missing).toBe(0);
     const [row] = await listMarkSheets(s.subjectTeacher, { examTermId: s.term.id, scope: "mine" });
-    expect(row.monthly.entered).toBe(2);
+    expect(row.stages[0].entered).toBe(2);
     // The database never stores a mark and an absence together (checked while the sheet is still a draft).
     await rejectsWith(
       t.db.update(schema.marks).set({ isAbsent: true, marksObtained: "5" }).where(eq(schema.marks.enrollmentId, two.id)),

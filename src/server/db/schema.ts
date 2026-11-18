@@ -25,6 +25,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { MAX_MONTHLY_TESTS, RESULT_STAGES, type ResultStage } from "@/lib/domain/stages";
 
 export const userRole = pgEnum("user_role", ["admin", "teacher"]);
 export const studentStatus = pgEnum("student_status", ["active", "archived", "transferred", "graduated"]);
@@ -33,16 +34,16 @@ export const markSheetStatus = pgEnum("mark_sheet_status", ["draft", "submitted"
 export const correctionStatus = pgEnum("correction_status", ["open", "accepted", "rejected"]);
 export const resultStatus = pgEnum("result_status", ["open", "class_approved", "final_approved"]);
 /**
- * A term is published in two stages. `monthly`: the Monthly Test component alone (its own mark sheets,
- * result and cards). `term`: for mark sheets, the remaining components (Term Examination …); for
- * results and remarks, the full term result built from both stages.
+ * A term is published in stages (src/lib/domain/stages.ts). `monthly`, `monthly_2`, `monthly_3`: one
+ * Monthly Test component alone (its own mark sheets, result and cards). `term`: for mark sheets, the
+ * remaining components (Term Examination …); for results and remarks, the full term result built from every stage.
  */
-export const resultStage = pgEnum("result_stage", ["monthly", "term"]);
+export const resultStage = pgEnum("result_stage", RESULT_STAGES);
 
 export type UserRole = (typeof userRole.enumValues)[number];
 export type MarkSheetStatus = (typeof markSheetStatus.enumValues)[number];
 export type ResultApprovalStatus = (typeof resultStatus.enumValues)[number];
-export type ResultStage = (typeof resultStage.enumValues)[number];
+export type { ResultStage };
 
 const tz = { withTimezone: true } as const;
 const createdAt = () => timestamp("created_at", tz).notNull().defaultNow();
@@ -301,12 +302,15 @@ export const examTerms = pgTable(
     marksDeadline: date("marks_deadline"),
     /** `null` = the default grading scale. */
     gradingScaleId: uuid("grading_scale_id").references(() => gradingScales.id, { onDelete: "restrict" }),
+    /** Monthly tests in this term (1–3), each published as its own result before the term result. */
+    monthlyTests: smallint("monthly_tests").notNull().default(1),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     unique("exam_terms_year_name_unique").on(t.academicYearId, t.name),
+    check("exam_terms_monthly_tests_range", sql`monthly_tests between 1 and ${sql.raw(String(MAX_MONTHLY_TESTS))}`),
     check("exam_terms_name_length", sql`length(trim(name)) between 1 and 60`),
     check("exam_terms_dates", sql`end_date is null or start_date is null or end_date >= start_date`),
   ],

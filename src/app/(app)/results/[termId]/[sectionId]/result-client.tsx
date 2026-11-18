@@ -9,8 +9,9 @@ import { TextDialog } from "@/components/app/text-dialog";
 import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/action-result";
 import { classApproveAction, finalApproveAction, reopenAction, saveRemarksAction } from "./actions";
+import type { ResultStage } from "@/lib/domain/stages";
 
-type ResultKey = { examTermId: string; sectionId: string; stage: "monthly" | "term" };
+type ResultKey = { examTermId: string; sectionId: string; stage: ResultStage };
 
 export function RemarksButton({ resultKey, enrollmentId, studentName, remarks, editable }: { resultKey: ResultKey; enrollmentId: string; studentName: string; remarks: string; editable: boolean }) {
   const [open, setOpen] = useState(false);

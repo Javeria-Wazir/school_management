@@ -1,9 +1,13 @@
 /** Validation for marks entry, review and class results (Modules 3–4). */
 import { z } from "zod";
+import { RESULT_STAGES } from "@/lib/domain/stages";
 import { idSchema } from "./common";
 
-/** `monthly` = the Monthly Test; `term` = the term components (sheets) or the full term result (results). */
-const stageSchema = z.enum(["monthly", "term"], { message: "Unknown result stage" });
+/**
+ * `monthly`, `monthly_2`, `monthly_3` = one Monthly Test of the term; `term` = the term components (sheets)
+ * or the full term result (results). See src/lib/domain/stages.ts.
+ */
+const stageSchema = z.enum(RESULT_STAGES, { message: "Unknown result stage" });
 
 export const sheetKeySchema = z.object({ examTermId: idSchema, sectionId: idSchema, classSubjectId: idSchema, stage: stageSchema });
 

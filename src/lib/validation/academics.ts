@@ -1,5 +1,6 @@
 /** Validation for Module 2: academic structure, students, terms, assessments and grading. */
 import { z } from "zod";
+import { MAX_MONTHLY_TESTS } from "@/lib/domain/stages";
 import { checkboxSchema, emptyToUndefined, idSchema, isoDateSchema } from "./common";
 
 const sortOrderSchema = z.coerce.number({ message: "Enter a whole number" }).int("Enter a whole number").min(0, "Use 0 or more").max(9999, "Use at most 9999").default(0);
@@ -105,6 +106,13 @@ export const assignmentSchema = z.object({
 
 // -- exam terms and assessments -------------------------------------------------------------------
 
+/** Monthly tests in a term, each published as its own result before the term result. */
+const monthlyTestsSchema = z.coerce
+  .number({ message: "Choose how many monthly tests" })
+  .int("Choose how many monthly tests")
+  .min(1, "A term has at least 1 monthly test")
+  .max(MAX_MONTHLY_TESTS, `A term has at most ${MAX_MONTHLY_TESTS} monthly tests`);
+
 export const examTermSchema = z
   .object({
     academicYearId: idSchema,
@@ -114,6 +122,7 @@ export const examTermSchema = z
     endDate: optionalDateSchema,
     marksDeadline: optionalDateSchema,
     gradingScaleId: optionalIdSchema,
+    monthlyTests: z.preprocess(emptyToUndefined, monthlyTestsSchema.default(1)),
   })
   .refine((v) => !v.startDate || !v.endDate || v.endDate >= v.startDate, { path: ["endDate"], message: "The end date must be on or after the start date" });
 
@@ -126,6 +135,8 @@ export const updateExamTermSchema = z
     endDate: optionalDateSchema,
     marksDeadline: optionalDateSchema,
     gradingScaleId: optionalIdSchema,
+    /** Left out = unchanged. */
+    monthlyTests: z.preprocess(emptyToUndefined, monthlyTestsSchema.optional()),
     isActive: checkboxSchema,
   })
   .refine((v) => !v.startDate || !v.endDate || v.endDate >= v.startDate, { path: ["endDate"], message: "The end date must be on or after the start date" });

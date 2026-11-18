@@ -7,6 +7,7 @@ import { UrlSelect } from "@/components/app/url-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { resultLabel, stagesForTerm } from "@/lib/domain/stages";
 import { requireUser } from "@/server/auth/current";
 import { getCapabilities } from "@/server/services/capabilities";
 import { resolveExamTerm } from "@/server/services/exam-terms";
@@ -34,7 +35,11 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
     <>
       <PageHeader
         title="Class results"
-        description={caps.isAdmin ? "Every class for this term: the monthly result (Monthly Test only) and the term result (Monthly Test + term examination). Class teachers approve their class; you give the final approval." : "Publish the monthly result as soon as the Monthly Test marks are approved, and the term result once the term examination is approved too."}
+        description={
+          caps.isAdmin
+            ? `Every class for this term: ${selected.monthlyTests > 1 ? `a result for each of the ${selected.monthlyTests} Monthly Tests` : "the monthly result (Monthly Test only)"} and the term result (Monthly ${selected.monthlyTests > 1 ? "Tests" : "Test"} + term examination). Class teachers approve their class; you give the final approval.`
+            : "Publish each monthly result as soon as its Monthly Test marks are approved, and the term result once the term examination is approved too."
+        }
       />
       <div className="flex flex-wrap items-end gap-3">
         <UrlSelect param="term" label="Exam term" value={selected.id} options={terms.map((t) => ({ value: t.id, label: t.isCurrent ? `${t.name} (current)` : t.name }))} />
@@ -51,8 +56,11 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                 <TableHead>Class</TableHead>
                 <TableHead>Class teacher</TableHead>
                 <TableHead className="text-right">Students</TableHead>
-                <TableHead className="min-w-52">Monthly result</TableHead>
-                <TableHead className="min-w-52">Term result</TableHead>
+                {stagesForTerm(selected.monthlyTests).map((stage) => (
+                  <TableHead key={stage} className="min-w-52">
+                    {resultLabel(stage, selected.monthlyTests)}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,8 +71,8 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                   </TableCell>
                   <TableCell>{r.classTeacherName ?? <span className="text-muted-foreground">Not set</span>}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.students}</TableCell>
-                  {(["monthly", "term"] as const).map((stage) => {
-                    const summary = r[stage];
+                  {r.stages.map((summary) => {
+                    const stage = summary.stage;
                     return (
                       <TableCell key={stage}>
                         <div className="flex items-center gap-3">
@@ -82,7 +90,7 @@ export default async function ResultsPage({ searchParams }: PageProps<"/results"
                           </div>
                           <Button asChild size="sm" variant={caps.isAdmin && summary.status === "class_approved" ? "default" : "outline"}>
                             <Link href={`/results/${selected.id}/${r.sectionId}?stage=${stage}`}>
-                              Open<span className="sr-only"> {stage === "monthly" ? "monthly" : "term"} result</span>
+                              Open<span className="sr-only"> {summary.label.toLowerCase()}</span>
                             </Link>
                           </Button>
                         </div>

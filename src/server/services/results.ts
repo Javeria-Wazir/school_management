@@ -2,9 +2,10 @@
  * Class results: the class teacher compiles every subject of a section for a term, writes remarks
  * and approves the result; the principal gives final approval or reopens it with a reason.
  *
- * A term has two results. The **monthly** result uses only the Monthly Test, so it can be published
- * as soon as monthly marks are approved. The **term** result combines the Monthly Test with the term
- * components once both sheets of every subject are approved. Each has its own approval and remarks.
+ * A term has one result per monthly test and a term result. A **monthly** result (`monthly`, `monthly_2`,
+ * `monthly_3`) uses only that Monthly Test, so it can be published as soon as its marks are approved. The
+ * **term** result combines every Monthly Test of the term with the term components (each component counted
+ * with its own maximum) once every sheet of every subject is approved. Each has its own approval and remarks.
  *
  * Only marks from submitted/approved sheets are counted — a draft is still the subject teacher's
  * working copy. A student with any missing mark is *Incomplete*: no total, percentage, grade or
@@ -24,6 +25,7 @@ import {
   type SubjectOutcome,
   type SubjectSpec,
 } from "@/lib/domain/calculations";
+import { isMonthlyStage, resultLabel, stageLabel, stageOfCode, stagesForTerm } from "@/lib/domain/stages";
 import { idSchema } from "@/lib/validation/common";
 import { remarksSchema, reopenResultSchema, resultKeySchema } from "@/lib/validation/results";
 import type { SessionUser } from "@/server/auth/session";
@@ -54,11 +56,11 @@ import {
 } from "@/server/db/schema";
 import { AppError, forbidden, notFound } from "@/server/errors";
 import { assertAdmin, type ServiceContext } from "./guards";
-import { sheetStatusesForSection, stageOfCode, submittedMarksForSection } from "./marks";
+import { sheetStatusesForSection, submittedMarksForSection } from "./marks";
 import { parseInput } from "./validate";
 
-/** Mark sheet stages a result is built from. */
-const sheetStagesFor = (stage: ResultStage): ResultStage[] => (stage === "monthly" ? ["monthly"] : ["monthly", "term"]);
+/** Mark sheet stages a result is built from: a monthly result its own Monthly Test, the term result every stage of the term. */
+const sheetStagesFor = (stage: ResultStage, monthlyTests: number): ResultStage[] => (isMonthlyStage(stage) ? [stage] : stagesForTerm(monthlyTests));
 
 export interface ResultSubjectSheet {
   stage: ResultStage;
@@ -115,14 +117,14 @@ export interface ResultApprovalView {
 
 export interface ClassResultView {
   stage: ResultStage;
-  term: { id: string; name: string; yearName: string };
+  term: { id: string; name: string; yearName: string; monthlyTests: number };
   section: { id: string; name: string; classId: string; className: string; classSortOrder: number; classTeacherId: string | null; classTeacherName: string | null };
   subjects: ResultSubject[];
   students: ResultStudent[];
   rules: GradingRules;
   approval: ResultApprovalView;
-  /** Status of the other stage's result, for the page's switch. */
-  otherStageStatus: ResultApprovalStatus;
+  /** Every result of the term (its monthly results, then the term result) with its status, for the page's switch. */
+  stageStatuses: { stage: ResultStage; status: ResultApprovalStatus }[];
   requirePrincipalApproval: boolean;
   readiness: { sheetsApproved: number; sheetsTotal: number; studentsComplete: number; studentsTotal: number; blockers: string[] };
   access: { isAdmin: boolean; isClassTeacher: boolean; canClassApprove: boolean; canFinalApprove: boolean; canReopen: boolean; canEditRemarks: boolean };
@@ -130,12 +132,11 @@ export interface ClassResultView {
 
 type ResultKey = { examTermId: string; sectionId: string; stage: ResultStage };
 
-const STAGE_LABEL: Record<ResultStage, string> = { monthly: "Monthly Test", term: "Term" };
 
 async function loadResultHeader(db: Db | Tx, key: { examTermId: string; sectionId: string }) {
   const [row] = await db
     .select({
-      term: { id: examTerms.id, name: examTerms.name, yearName: academicYears.name, gradingScaleId: examTerms.gradingScaleId },
+      term: { id: examTerms.id, name: examTerms.name, yearName: academicYears.name, gradingScaleId: examTerms.gradingScaleId, monthlyTests: examTerms.monthlyTests },
       section: {
         id: sections.id,
         name: sections.name,
@@ -212,7 +213,10 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
   if (!canSee(ctx.user, header.section.classTeacherId)) throw forbidden("Only the class teacher of this class or the principal can see its result.");
   const [settings] = await ctx.db.select().from(schoolSettings).where(eq(schoolSettings.id, 1));
   const rules = await loadRules(ctx.db, header.term.gradingScaleId, settings.decimalPlaces);
-  const stages = sheetStagesFor(key.stage);
+  const termStages = stagesForTerm(header.term.monthlyTests);
+  // A monthly test the term does not have (e.g. Monthly Test 3 of a two-monthly term).
+  if (!termStages.includes(key.stage)) throw notFound("Class result");
+  const stages = sheetStagesFor(key.stage, header.term.monthlyTests);
 
   const subjectRows = await ctx.db
     .select({
@@ -354,17 +358,21 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
     .where(and(eq(resultApprovals.examTermId, key.examTermId), eq(resultApprovals.sectionId, key.sectionId)));
   const approvalRow = approvalRows.find((a) => a.stage === key.stage);
   const approval: ResultApprovalView = approvalRow ? { ...approvalRow } : OPEN_APPROVAL;
-  const otherStageStatus = approvalRows.find((a) => a.stage !== key.stage)?.status ?? "open";
+  const stageStatuses = termStages.map((stage) => ({ stage, status: approvalRows.find((a) => a.stage === stage)?.status ?? "open" }));
 
   const neededSheets = resultSubjects.flatMap((s) => s.sheets);
   const sheetsApproved = neededSheets.filter((s) => s.status === "approved").length;
   const studentsComplete = resultStudents.filter((s) => s.outcome.complete).length;
   const blockers: string[] = [];
   if (resultSubjects.length === 0) {
-    blockers.push(key.stage === "monthly" ? "No subject has Monthly Test maximum marks for this term." : "No subject has maximum marks for this term yet.");
+    blockers.push(
+      isMonthlyStage(key.stage)
+        ? `No subject has ${stageLabel(key.stage, header.term.monthlyTests)} maximum marks for this term.`
+        : "No subject has maximum marks for this term yet.",
+    );
   }
   if (key.stage === "term" && unconfiguredSubjects.length) blockers.push(`No maximum marks for this term: ${unconfiguredSubjects.join(", ")}.`);
-  const notApproved = resultSubjects.flatMap((s) => s.sheets.filter((x) => x.status !== "approved").map((x) => (stages.length > 1 ? `${s.name} (${STAGE_LABEL[x.stage]})` : s.name)));
+  const notApproved = resultSubjects.flatMap((s) => s.sheets.filter((x) => x.status !== "approved").map((x) => (stages.length > 1 ? `${s.name} (${x.stage === "term" ? "Term" : stageLabel(x.stage, header.term.monthlyTests)})` : s.name)));
   if (notApproved.length) blockers.push(`Marks not approved yet: ${notApproved.join(", ")}.`);
   if (resultStudents.length === 0) blockers.push("No students are enrolled in this section.");
   const incomplete = resultStudents.length - studentsComplete;
@@ -374,13 +382,13 @@ export async function getClassResult(ctx: ServiceContext, input: unknown): Promi
   const isClassTeacher = header.section.classTeacherId === ctx.user.id;
   return {
     stage: key.stage,
-    term: { id: header.term.id, name: header.term.name, yearName: header.term.yearName },
+    term: { id: header.term.id, name: header.term.name, yearName: header.term.yearName, monthlyTests: header.term.monthlyTests },
     section: { ...header.section },
     subjects: resultSubjects,
     students: resultStudents,
     rules,
     approval,
-    otherStageStatus,
+    stageStatuses,
     requirePrincipalApproval: settings.requirePrincipalApproval,
     readiness: { sheetsApproved, sheetsTotal: neededSheets.length, studentsComplete, studentsTotal: resultStudents.length, blockers },
     access: {
@@ -446,7 +454,7 @@ export async function classApproveResult(ctx: ServiceContext, input: unknown): P
       .select({ classSubjectId: markSheets.classSubjectId, stage: markSheets.stage })
       .from(markSheets)
       .where(and(eq(markSheets.examTermId, key.examTermId), eq(markSheets.sectionId, key.sectionId), eq(markSheets.status, "approved")));
-    const stages = sheetStagesFor(key.stage);
+    const stages = sheetStagesFor(key.stage, view.term.monthlyTests);
     const missing = needed.some(
       (n) => stages.includes(stageOfCode(n.code)) && !approvedSheets.some((a) => a.classSubjectId === n.classSubjectId && a.stage === stageOfCode(n.code)),
     );
@@ -537,6 +545,9 @@ export async function saveRemarks(ctx: ServiceContext, input: unknown): Promise<
 // -- lists ----------------------------------------------------------------------------------------
 
 export interface StageSummary {
+  stage: ResultStage;
+  /** "Monthly result", "Monthly 2 result", "Term result". */
+  label: string;
   sheetsTotal: number;
   sheetsApproved: number;
   status: ResultApprovalStatus;
@@ -548,14 +559,14 @@ export interface ClassResultRow {
   className: string;
   classTeacherName: string | null;
   students: number;
-  monthly: StageSummary;
-  term: StageSummary;
+  /** One per result of the term: its monthly results, then the term result. */
+  stages: StageSummary[];
 }
 
 /** Sections of a term's year whose results the user can see (principal: all; class teacher: their own). */
 export async function listClassResults(ctx: ServiceContext, input: unknown): Promise<ClassResultRow[]> {
   const examTermId = parseInput(idSchema, input);
-  const [term] = await ctx.db.select({ yearId: examTerms.academicYearId }).from(examTerms).where(eq(examTerms.id, examTermId));
+  const [term] = await ctx.db.select({ yearId: examTerms.academicYearId, monthlyTests: examTerms.monthlyTests }).from(examTerms).where(eq(examTerms.id, examTermId));
   if (!term) throw notFound("Exam term");
   const rows = await ctx.db
     .select({
@@ -590,16 +601,19 @@ export async function listClassResults(ctx: ServiceContext, input: unknown): Pro
     .where(and(eq(resultApprovals.examTermId, examTermId), inArray(resultApprovals.sectionId, sectionIds)));
 
   const summary = (sectionId: string, classId: string, stage: ResultStage): StageSummary => {
-    const stages = sheetStagesFor(stage);
+    const stages = sheetStagesFor(stage, term.monthlyTests);
     const sheets = needed.filter((n) => n.classId === classId && stages.includes(stageOfCode(n.code)));
     // One sheet per subject × stage, however many components the stage has.
     const keys = [...new Set(sheets.map((n) => `${n.classSubjectId}:${stageOfCode(n.code)}`))];
     const approved = keys.filter((k) => approvedSheets.some((a) => a.sectionId === sectionId && `${a.classSubjectId}:${a.stage}` === k)).length;
     return {
+      stage,
+      label: resultLabel(stage, term.monthlyTests),
       sheetsTotal: keys.length,
       sheetsApproved: approved,
       status: approvals.find((a) => a.sectionId === sectionId && a.stage === stage)?.status ?? "open",
     };
   };
-  return rows.map(({ classId, ...r }) => ({ ...r, monthly: summary(r.sectionId, classId, "monthly"), term: summary(r.sectionId, classId, "term") }));
+  const termStages = stagesForTerm(term.monthlyTests);
+  return rows.map(({ classId, ...r }) => ({ ...r, stages: termStages.map((stage) => summary(r.sectionId, classId, stage)) }));
 }

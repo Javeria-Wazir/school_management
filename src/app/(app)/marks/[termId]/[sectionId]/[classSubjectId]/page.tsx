@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app/page";
 import { SheetStatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
+import { parseStage, stageLabel } from "@/lib/domain/stages";
 import { cn } from "@/lib/utils";
 import { requireUser } from "@/server/auth/current";
 import { AppError } from "@/server/errors";
@@ -13,12 +14,10 @@ import { MarksGrid } from "./marks-grid";
 
 export const metadata = { title: "Enter marks" };
 
-const STAGE_LABEL = { monthly: "Monthly Test", term: "Term examination" } as const;
-
 export default async function MarkSheetPage({ params, searchParams }: PageProps<"/marks/[termId]/[sectionId]/[classSubjectId]">) {
   const ctx = await requireUser();
   const { termId, sectionId, classSubjectId } = await params;
-  const stage = (await searchParams).stage === "term" ? "term" : "monthly";
+  const stage = parseStage((await searchParams).stage);
   let sheet;
   try {
     sheet = await getMarkSheet(ctx, { examTermId: termId, sectionId, classSubjectId, stage });
@@ -45,7 +44,7 @@ export default async function MarkSheetPage({ params, searchParams }: PageProps<
         </Link>
       </Button>
       <PageHeader
-        title={`${sheet.subjectName} · ${sheet.className} ${sheet.sectionName} · ${STAGE_LABEL[stage]}`}
+        title={`${sheet.subjectName} · ${sheet.className} ${sheet.sectionName} · ${stageLabel(stage, sheet.monthlyTests)}`}
         description={
           <>
             {sheet.termName}, {sheet.yearName} · Subject teacher: {sheet.teacherName ?? "not assigned"}
@@ -67,7 +66,7 @@ export default async function MarkSheetPage({ params, searchParams }: PageProps<
                 s.stage === stage && "border-primary bg-primary/5 font-medium",
               )}
             >
-              {STAGE_LABEL[s.stage]} <SheetStatusBadge status={s.status} />
+              {stageLabel(s.stage, sheet.monthlyTests)} <SheetStatusBadge status={s.status} />
             </Link>
           ))}
       </nav>

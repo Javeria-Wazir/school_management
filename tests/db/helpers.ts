@@ -106,7 +106,8 @@ export async function seedSchool(db: Db) {
     .returning();
   await db.insert(schema.teacherAssignments).values({ teacherId: subjectTeacher.user.id, sectionId: section.id, classSubjectId: classSubject.id });
   const [term] = await db.insert(schema.examTerms).values({ academicYearId: year.id, name: "First Term" }).returning();
-  const types = await db.select().from(schema.assessmentTypes);
+  // A one-monthly term: Monthly Test 1 and the Term Examination (not Monthly Test 2 or 3).
+  const types = (await db.select().from(schema.assessmentTypes)).filter((t) => t.code === "MONTHLY" || t.code === "TERM_EXAM");
   const assessments = await db
     .insert(schema.assessments)
     .values(types.map((t) => ({ examTermId: term.id, classSubjectId: classSubject.id, assessmentTypeId: t.id, maxMarks: t.defaultMaxMarks })))

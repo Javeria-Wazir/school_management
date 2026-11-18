@@ -29,6 +29,7 @@ import {
 import { AppError, forbidden, notFound } from "@/server/errors";
 import type { ServiceContext } from "./guards";
 import { parseInput } from "./validate";
+import { MONTHLY_CODES } from "@/lib/domain/stages";
 
 const reasonSchema = z.string().trim().min(5, "Please give a reason (at least 5 characters)").max(300, "Use at most 300 characters");
 const removeSchema = z.object({ enrollmentId: idSchema, reason: reasonSchema });
@@ -272,9 +273,14 @@ export async function addSubjectToClass(ctx: ServiceContext, input: unknown): Pr
         .returning({ id: classSubjects.id });
       classSubjectId = row.id;
     }
-    const terms = await tx.select({ id: examTerms.id }).from(examTerms).where(eq(examTerms.academicYearId, section.academicYearId));
-    const types = await tx.select({ id: assessmentTypes.id, max: assessmentTypes.defaultMaxMarks }).from(assessmentTypes).where(eq(assessmentTypes.isActive, true));
-    const papers = terms.flatMap((t) => types.map((ty) => ({ examTermId: t.id, classSubjectId: classSubjectId!, assessmentTypeId: ty.id, maxMarks: ty.max })));
+    const terms = await tx.select({ id: examTerms.id, monthlyTests: examTerms.monthlyTests }).from(examTerms).where(eq(examTerms.academicYearId, section.academicYearId));
+    const types = await tx.select({ id: assessmentTypes.id, code: assessmentTypes.code, max: assessmentTypes.defaultMaxMarks }).from(assessmentTypes).where(eq(assessmentTypes.isActive, true));
+    // Each term gets only the monthly tests it has (Monthly Test 2 only in a term with two or more).
+    const papers = terms.flatMap((t) =>
+      types
+        .filter((ty) => !MONTHLY_CODES.slice(t.monthlyTests).includes(ty.code as (typeof MONTHLY_CODES)[number]))
+        .map((ty) => ({ examTermId: t.id, classSubjectId: classSubjectId!, assessmentTypeId: ty.id, maxMarks: ty.max })),
+    );
     if (papers.length) {
       await tx.insert(assessments).values(papers).onConflictDoNothing({ target: [assessments.examTermId, assessments.classSubjectId, assessments.assessmentTypeId] });
     }

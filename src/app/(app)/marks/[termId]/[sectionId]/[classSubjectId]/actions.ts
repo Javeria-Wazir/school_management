@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/action-result";
+import type { ResultStage } from "@/lib/domain/stages";
 import { runAction } from "@/server/actions";
 import { requireUser } from "@/server/auth/current";
 import { approveMarkSheet, requestCorrection, resolveCorrection, returnMarkSheet, saveMarks, submitMarkSheet } from "@/server/services/marks";
 
-type SheetKey = { examTermId: string; sectionId: string; classSubjectId: string; stage: "monthly" | "term" };
+type SheetKey = { examTermId: string; sectionId: string; classSubjectId: string; stage: ResultStage };
 type Cell = { enrollmentId: string; assessmentId: string; value: string };
 
 function refresh(key: SheetKey) {

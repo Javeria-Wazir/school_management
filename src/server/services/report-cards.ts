@@ -6,13 +6,14 @@
  * their card, an incomplete student as INCOMPLETE, and
  * every card is marked PROVISIONAL until the result has its final approval. Signature lines are blank.
  */
-import { formatNumber, type GradingRules } from "@/lib/domain/calculations";
+import { Dec, formatNumber, type GradingRules } from "@/lib/domain/calculations";
 import { lightColor, softColor, themeForClass, type ThemeMeta } from "@/components/report-card/themes";
 import type { CardRow, CardView } from "@/components/report-card/types";
 import { forbidden } from "@/server/errors";
 import type { ServiceContext } from "./guards";
 import { getClassResult, type ClassResultView, type ResultStudent } from "./results";
 import { getSchoolSettings } from "./settings";
+import { isMonthlyCode, isMonthlyStage, stageLabel } from "@/lib/domain/stages";
 
 const ICONS = new Set(["ENG", "URDU", "MATHS", "SCI", "SST", "NAZRA", "ISL", "COMP", "CHEM", "BIO", "PHY"]);
 const SCIENCE = new Set(["CHEM", "BIO", "PHY"]);
@@ -78,10 +79,23 @@ function buildRows(result: ClassResultView, student: ResultStudent, places: numb
   return takenSubjects(result, student).map((subject, i) => {
     // No outcome when the student joined after every test of this subject.
     const o = student.outcome.subjects.find((x) => x.subject.id === subject.id);
-    const monthly = subject.components.find((c) => c.code === "MONTHLY");
+    // The Monthly column: the result's Monthly Test — on the term card of a term with several, their sum.
+    const monthlies = subject.components.filter((c) => isMonthlyCode(c.code));
     const termExam = subject.components.find((c) => c.code === "TERM_EXAM");
     const sat = (c: { id: string } | undefined) => !!c && !notJoined.has(c.id);
     const mark = (id: string | undefined) => (!id || notJoined.has(id) ? "—" : absent.has(id) ? "A" : formatNumber(student.marks[id] ?? null, places));
+    const satMonthlies = monthlies.filter(sat);
+    const monthlyMark =
+      monthlies.length <= 1
+        ? mark(monthlies[0]?.id)
+        : satMonthlies.length === 0
+          ? "—"
+          : satMonthlies.every((c) => absent.has(c.id))
+            ? "A"
+            : satMonthlies.some((c) => student.marks[c.id] === undefined)
+              ? "—"
+              : formatNumber(satMonthlies.reduce((sum, c) => sum.plus(student.marks[c.id]), new Dec(0)).toString(), places);
+    const monthlyMax = satMonthlies.length ? formatNumber(satMonthlies.reduce((sum, c) => sum.plus(c.max), new Dec(0)).toString(), places) : "—";
     const satComponents = subject.components.filter(sat);
     const absentThroughout = satComponents.length > 0 && satComponents.every((c) => absent.has(c.id));
     // Absent from the whole test: no per-subject percentage or grade either, only "A".
@@ -94,8 +108,8 @@ function buildRows(result: ClassResultView, student: ResultStudent, places: numb
       name: subject.name,
       code: subject.code,
       icon: ICONS.has(subject.code) ? `/report-card/subj-${subject.code.toLowerCase()}.svg` : "/report-card/subj-generic.svg",
-      m: mark(monthly?.id),
-      mm: sat(monthly) ? formatNumber(monthly!.max, places) : "—",
+      m: monthlyMark,
+      mm: monthlyMax,
       t: mark(termExam?.id),
       tm: sat(termExam) ? formatNumber(termExam!.max, places) : "—",
       ob: !o ? "—" : absentThroughout ? "A" : formatNumber(o.total.obtained, places),
@@ -132,9 +146,9 @@ export async function buildReportCards(
   input: { examTermId: unknown; sectionId: unknown; stage: unknown; enrollmentId?: string; blackAndWhite?: boolean },
 ): Promise<ReportCardSet> {
   const result = await getClassResult(ctx, { examTermId: input.examTermId, sectionId: input.sectionId, stage: input.stage });
-  const monthlyOnly = result.stage === "monthly";
-  // A monthly card shows only the Monthly Test, under a title that says so.
-  const termName = monthlyOnly ? `${result.term.name} · Monthly Test` : result.term.name;
+  const monthlyOnly = isMonthlyStage(result.stage);
+  // A monthly card shows only its Monthly Test, under a title that says so ("Monthly Test 2" when the term has several).
+  const termName = monthlyOnly ? `${result.term.name} · ${stageLabel(result.stage, result.term.monthlyTests)}` : result.term.name;
   const settings = await getSchoolSettings(ctx.db);
   const places = settings.decimalPlaces;
   const theme = themeForClass(result.section.className, result.section.classSortOrder);

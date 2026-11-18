@@ -2,7 +2,8 @@
  * Exam terms, assessment types (Monthly 25, Term 75 …) and per-term maximum marks
  * (term × class subject × assessment type).
  */
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { MONTHLY_CODES, MONTHLY_STAGES } from "@/lib/domain/stages";
 import { idSchema } from "@/lib/validation/common";
 import {
   assessmentTypeSchema,
@@ -11,7 +12,7 @@ import {
   updateAssessmentTypeSchema,
   updateExamTermSchema,
 } from "@/lib/validation/academics";
-import type { Db } from "@/server/db/client";
+import type { Db, Tx } from "@/server/db/client";
 import { withActor } from "@/server/db/actor";
 import { assessments, assessmentTypes, classes, classSubjects, examTerms, gradingScales, markSheets, schoolSettings, subjects } from "@/server/db/schema";
 import { AppError, notFound } from "@/server/errors";
@@ -28,6 +29,8 @@ export interface ExamTermRow {
   marksDeadline: string | null;
   gradingScaleId: string | null;
   gradingScaleName: string | null;
+  /** Monthly tests in the term (1–3). */
+  monthlyTests: number;
   isActive: boolean;
   isCurrent: boolean;
   assessmentCount: number;
@@ -45,6 +48,7 @@ export async function listExamTerms(db: Db, academicYearId: string): Promise<Exa
       marksDeadline: examTerms.marksDeadline,
       gradingScaleId: examTerms.gradingScaleId,
       gradingScaleName: gradingScales.name,
+      monthlyTests: examTerms.monthlyTests,
       isActive: examTerms.isActive,
       isCurrent: sql<boolean>`coalesce(${examTerms.id} = (select ${schoolSettings.currentExamTermId} from ${schoolSettings} where ${schoolSettings.id} = 1), false)`,
       assessmentCount: sql<number>`(select count(*)::int from ${assessments} where ${assessments.examTermId} = ${examTerms.id})`,
@@ -77,6 +81,21 @@ export async function updateExamTerm(ctx: ServiceContext, input: unknown): Promi
   assertAdmin(ctx.user);
   const { id, ...data } = parseInput(updateExamTermSchema, input);
   await withActor(ctx.db, ctx.user.id, async (tx) => {
+    const [before] = await tx.select({ monthlyTests: examTerms.monthlyTests }).from(examTerms).where(eq(examTerms.id, id));
+    if (!before) throw notFound("Exam term");
+    if (data.monthlyTests !== undefined && data.monthlyTests < before.monthlyTests) {
+      // Fewer monthly tests: only while the dropped ones have no mark sheets; their maximums are removed.
+      const dropped = MONTHLY_STAGES.slice(data.monthlyTests);
+      const [used] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(markSheets)
+        .where(and(eq(markSheets.examTermId, id), inArray(markSheets.stage, dropped)));
+      if (used.n > 0) throw new AppError("RULE", "Marks have already been entered for a monthly test you are removing, so the number of monthly tests cannot go down.");
+      const droppedTypes = await tx.select({ id: assessmentTypes.id }).from(assessmentTypes).where(inArray(assessmentTypes.code, MONTHLY_CODES.slice(data.monthlyTests)));
+      if (droppedTypes.length) {
+        await tx.delete(assessments).where(and(eq(assessments.examTermId, id), inArray(assessments.assessmentTypeId, droppedTypes.map((t) => t.id))));
+      }
+    }
     const updated = await tx
       .update(examTerms)
       .set({
@@ -89,6 +108,11 @@ export async function updateExamTerm(ctx: ServiceContext, input: unknown): Promi
       .where(eq(examTerms.id, id))
       .returning({ id: examTerms.id });
     if (updated.length === 0) throw notFound("Exam term");
+    // More monthly tests on a term that is already set up: add the new tests' maximums straight away.
+    if (data.monthlyTests !== undefined && data.monthlyTests > before.monthlyTests) {
+      const [prepared] = await tx.select({ n: sql<number>`count(*)::int` }).from(assessments).where(eq(assessments.examTermId, id));
+      if (prepared.n > 0) await insertMissingAssessments(tx, id);
+    }
   });
 }
 
@@ -151,22 +175,32 @@ export async function updateAssessmentType(ctx: ServiceContext, input: unknown):
 export async function prepareTermAssessments(ctx: ServiceContext, input: unknown): Promise<{ created: number }> {
   assertAdmin(ctx.user);
   const termId = parseInput(idSchema, input);
-  return withActor(ctx.db, ctx.user.id, async (tx) => {
-    const [term] = await tx.select({ yearId: examTerms.academicYearId }).from(examTerms).where(eq(examTerms.id, termId));
-    if (!term) throw notFound("Exam term");
-    const pairs = await tx
-      .select({ classSubjectId: classSubjects.id, assessmentTypeId: assessmentTypes.id, maxMarks: assessmentTypes.defaultMaxMarks })
-      .from(classSubjects)
-      .innerJoin(assessmentTypes, eq(assessmentTypes.isActive, true))
-      .where(and(eq(classSubjects.academicYearId, term.yearId), eq(classSubjects.isActive, true)));
-    if (pairs.length === 0) return { created: 0 };
-    const inserted = await tx
-      .insert(assessments)
-      .values(pairs.map((p) => ({ examTermId: termId, ...p })))
-      .onConflictDoNothing({ target: [assessments.examTermId, assessments.classSubjectId, assessments.assessmentTypeId] })
-      .returning({ id: assessments.id });
-    return { created: inserted.length };
-  });
+  return withActor(ctx.db, ctx.user.id, (tx) => insertMissingAssessments(tx, termId));
+}
+
+/**
+ * Every active class subject × every active assessment type the term uses: all non-monthly types, and
+ * the monthly types up to the term's number of monthly tests (Monthly Test 2 only in a two-monthly term).
+ */
+async function insertMissingAssessments(tx: Tx, termId: string): Promise<{ created: number }> {
+  const [term] = await tx.select({ yearId: examTerms.academicYearId, monthlyTests: examTerms.monthlyTests }).from(examTerms).where(eq(examTerms.id, termId));
+  if (!term) throw notFound("Exam term");
+  const unusedMonthly = MONTHLY_CODES.slice(term.monthlyTests);
+  const pairs = await tx
+    .select({ classSubjectId: classSubjects.id, assessmentTypeId: assessmentTypes.id, maxMarks: assessmentTypes.defaultMaxMarks })
+    .from(classSubjects)
+    .innerJoin(
+      assessmentTypes,
+      and(eq(assessmentTypes.isActive, true), unusedMonthly.length ? notInArray(assessmentTypes.code, [...unusedMonthly]) : undefined),
+    )
+    .where(and(eq(classSubjects.academicYearId, term.yearId), eq(classSubjects.isActive, true)));
+  if (pairs.length === 0) return { created: 0 };
+  const inserted = await tx
+    .insert(assessments)
+    .values(pairs.map((p) => ({ examTermId: termId, ...p })))
+    .onConflictDoNothing({ target: [assessments.examTermId, assessments.classSubjectId, assessments.assessmentTypeId] })
+    .returning({ id: assessments.id });
+  return { created: inserted.length };
 }
 
 export interface TermAssessmentRow {

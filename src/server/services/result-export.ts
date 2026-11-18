@@ -7,8 +7,8 @@ import ExcelJS from "exceljs";
 import type { ServiceContext } from "./guards";
 import { getClassResult, subjectCell, type ClassResultView, type ResultStudent } from "./results";
 import { getSchoolSettings } from "./settings";
+import { resultLabel } from "@/lib/domain/stages";
 
-const STAGE_TITLE = { monthly: "Monthly result", term: "Term result" } as const;
 
 /** What a subject cell shows: the mark, or why there is none. Numbers stay numbers so Excel can sum them. */
 function cellValue(result: ClassResultView, student: ResultStudent, subjectId: string): number | string {
@@ -29,7 +29,7 @@ export async function exportClassResult(ctx: ServiceContext, input: unknown): Pr
   const result = await getClassResult(ctx, input);
   const settings = await getSchoolSettings(ctx.db);
   const label = `${result.section.className} ${result.section.name}`;
-  const title = `${label} · ${result.term.name} · ${STAGE_TITLE[result.stage]}`;
+  const title = `${label} · ${result.term.name} · ${resultLabel(result.stage, result.term.monthlyTests)}`;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = settings.schoolName;
@@ -77,6 +77,6 @@ export async function exportClassResult(ctx: ServiceContext, input: unknown): Pr
   });
   sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 5 }];
 
-  const filename = `${label} ${result.term.name} ${STAGE_TITLE[result.stage]}.xlsx`.replace(/[^\w .-]+/g, "").replace(/\s+/g, " ");
+  const filename = `${label} ${result.term.name} ${resultLabel(result.stage, result.term.monthlyTests)}.xlsx`.replace(/[^\w .-]+/g, "").replace(/\s+/g, " ");
   return { buffer: Buffer.from(await workbook.xlsx.writeBuffer()), filename };
 }
